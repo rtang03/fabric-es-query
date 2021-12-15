@@ -1,0 +1,60 @@
+# e.g. https://github.com/vegasbrianc/prometheus/blob/master/docker-compose.yml
+version: "3"
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+
+networks:
+  devnet:
+services:
+  jaeger:
+    container_name: jaeger
+    image: jaegertracing/all-in-one:latest
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    ports:
+      - "5775"
+      - "6831"
+      - "6832"
+      - "5778"
+      - "16686"
+      - "14268"
+      -  "14250"
+      -  "9411"
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:v2.21.0
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+      - prometheus_data:/prometheus
+    command:
+      # can reload configuration files (e.g. rules) without restarting Prometheus
+      - '--web.enable-lifecycle'
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - "9090:9090"
+  grafana:
+    image: grafana/grafana:8.3.3
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - grafana_data:/var/lib/grafana
+#  postgres:
+#    container_name: postgres
+#    image:
+#    environment:
+#      - POSTGRES_PASSWORD=docker
+#      - POSTGRES_USER=postgres
+#      - POSTGRES_DB=postgres
+#    volumes:
+#      # - $ARTIFACTS/postgres1:/var/lib/postgresql/data
+#      - $SCRIPTS/createdb.sql:/docker-entrypoint-initdb.d/1-createdb.sql
+#      - $SCRIPTS/init-auth-db.sh:/docker-entrypoint-initdb.d/2-init-auth-db.sh
+#    command: postgres
+#    # this open port for development, should be removed for production
+#    ports:
+#      - "5432"
+#    networks:
+#      - devnet
