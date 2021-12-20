@@ -7,7 +7,6 @@ import {
   SpanStatusCode,
   propagation,
 } from '@opentelemetry/api';
-import axios from 'axios';
 import fetch from 'isomorphic-unfetch';
 import tracer from './tracing-client';
 

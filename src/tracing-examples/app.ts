@@ -1,8 +1,7 @@
 import api from '@opentelemetry/api';
-import axios from 'axios';
 import express from 'express';
 import fetch from 'isomorphic-unfetch';
-import { addTraceId } from './tracing';
+import { addTraceId } from './tracing-server';
 
 // import { countAllRequests } from './monitoring';
 const PORT = process.env.PORT || '8080';

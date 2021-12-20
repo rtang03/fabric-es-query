@@ -5,12 +5,12 @@ volumes:
   grafana_data: {}
 
 networks:
-  devnet:
+  openplatform:
 
 services:
   jaeger-all-in-one:
     networks:
-      - devnet
+      - openplatform
     container_name: jaeger
     image: jaegertracing/all-in-one:latest
     environment:
@@ -24,11 +24,11 @@ services:
       - "16686:16686"
       - "14268:14268"
       - "14250"
-      -  "9411"
+      - "9411"
 
   prometheus:
     networks:
-      - devnet
+      - openplatform
     container_name: prometheus
     image: prom/prometheus:v2.32.0
     volumes:
@@ -41,22 +41,10 @@ services:
     ports:
       - "9090:9090"
 
-  grafana:
-    networks:
-      - devnet
-    container_name: grafana
-    image: grafana/grafana:8.3.3
-    ports:
-      - "3000:3000"
-    restart: unless-stopped
-    volumes:
-      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
-      - grafana_data:/var/lib/grafana
-
 # https://github.com/open-telemetry/opentelemetry-collector/tree/main/examples/local
   otel-collector:
     networks:
-      - devnet
+      - openplatform
     container_name: collector
     image: otel/opentelemetry-collector:0.27.0
     command: ["--config=/conf/collector-config.yaml", "--log-level=DEBUG"]
@@ -69,20 +57,47 @@ services:
     depends_on:
       - jaeger-all-in-one
 
+  explorer-db:
+    networks:
+      - openplatform
+    container_name: explorer-db
+    image: hyperledger/explorer-db:1.1.8
+    environment:
+      - DATABASE_DATABASE=fabricexplorer
+      - DATABASE_USERNAME=hppoc
+      - DATABASE_PASSWORD=password
+    volumes:
+      - ./artifacts/postgres:/var/lib/postgresql/data
+      - ./scripts/createdb.sh:/docker-entrypoint-initdb.d/createdb.sh
+
 #  postgres:
+#    # https://github.com/bitnami/bitnami-docker-postgresql#configuration
 #    container_name: postgres
-#    image:
+#    image: postgres:14.1-alpine3.15
 #    environment:
 #      - POSTGRES_PASSWORD=docker
 #      - POSTGRES_USER=postgres
 #      - POSTGRES_DB=postgres
 #    volumes:
-#      # - $ARTIFACTS/postgres1:/var/lib/postgresql/data
-#      - $SCRIPTS/createdb.sql:/docker-entrypoint-initdb.d/1-createdb.sql
-#      - $SCRIPTS/init-auth-db.sh:/docker-entrypoint-initdb.d/2-init-auth-db.sh
+#      - ./artifacts/postgres:/var/lib/postgresql/data
+#      - ./scripts/createdb.sql:/docker-entrypoint-initdb.d/1-createdb.sql
+#      - ./scripts/init-auth-db.sh:/docker-entrypoint-initdb.d/2-init-auth-db.sh
 #    command: postgres
-#    # this open port for development, should be removed for production
 #    ports:
-#      - "5432"
+#      - "5432:5432"
 #    networks:
-#      - devnet
+#      - openplatform
+
+#  grafana:
+#    networks:
+#      - openplatform
+#    container_name: grafana
+#    image: grafana/grafana:8.3.3
+#    ports:
+#      - "3000:3000"
+#    restart: unless-stopped
+#    volumes:
+#      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+#      - grafana_data:/var/lib/grafana
+
+#  bitnami/postgres-exporter: 0.10.0-debian-10-r152
