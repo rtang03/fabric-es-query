@@ -1,25 +1,23 @@
-import { MeterProvider, ConsoleMetricExporter } from '@opentelemetry/metrics';
-import { Request, Response, NextFunction } from 'express';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
+import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
+import { Request, Response, NextFunction } from 'express';
 
 const meter = new MeterProvider({
-  exporter: new PrometheusExporter({ port: 9000 }) as any,
+  exporter: new PrometheusExporter({ port: 9000 }),
   interval: 1000,
-}).getMeter('prometheus');
+}).getMeter('my-meter');
 
-const requestCount = meter.createCounter('express_counter', {
+const requestCount = meter.createCounter('visits', {
   description: 'Count all incoming requests',
+  component: 'query-handler',
 });
 
-const boundInstruments = new Map();
-
 export const countAllRequests = () => (req: Request, res: Response, next: NextFunction) => {
-  if (!boundInstruments.has(req.path)) {
-    const labels = { route: req.path };
-    const boundCounter = requestCount.bind(labels);
-    boundInstruments.set(req.path, boundCounter);
-  }
+  requestCount.add(1, {
+    pid: `${process.pid}`,
+    route: req.path,
+    environment: 'dev',
+  });
 
-  boundInstruments.get(req.path).add(1);
   next();
 };

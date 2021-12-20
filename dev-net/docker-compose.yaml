@@ -6,8 +6,11 @@ volumes:
 
 networks:
   devnet:
+
 services:
-  jaeger:
+  jaeger-all-in-one:
+    networks:
+      - devnet
     container_name: jaeger
     image: jaegertracing/all-in-one:latest
     environment:
@@ -18,12 +21,16 @@ services:
       - "6832"
       - "5778"
       - "16686"
-      - "14268"
-      -  "14250"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250"
       -  "9411"
+
   prometheus:
+    networks:
+      - devnet
     container_name: prometheus
-    image: prom/prometheus:v2.21.0
+    image: prom/prometheus:v2.32.0
     volumes:
       - ./prometheus/:/etc/prometheus/
       - prometheus_data:/prometheus
@@ -33,7 +40,11 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
     ports:
       - "9090:9090"
+
   grafana:
+    networks:
+      - devnet
+    container_name: grafana
     image: grafana/grafana:8.3.3
     ports:
       - "3000:3000"
@@ -41,6 +52,23 @@ services:
     volumes:
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
       - grafana_data:/var/lib/grafana
+
+# https://github.com/open-telemetry/opentelemetry-collector/tree/main/examples/local
+  otel-collector:
+    networks:
+      - devnet
+    container_name: collector
+    image: otel/opentelemetry-collector:0.27.0
+    command: ["--config=/conf/collector-config.yaml", "--log-level=DEBUG"]
+    volumes:
+      - ./ot/collector-config.yaml:/conf/collector-config.yaml
+    ports:
+      - "9464:9464"
+      - "4317:4317"
+      - "55681:55681"
+    depends_on:
+      - jaeger-all-in-one
+
 #  postgres:
 #    container_name: postgres
 #    image:
