@@ -103,5 +103,5 @@ dist
 # TernJS port file
 .tern-port
 .idea/
-assets/
+assets/wallet/
 NOTE.md

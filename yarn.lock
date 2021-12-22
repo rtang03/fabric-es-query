@@ -730,6 +730,13 @@
     "@opentelemetry/semantic-conventions" "^1.0.0"
     "@types/redis" "2.8.31"
 
+"@opentelemetry/instrumentation-winston@^0.27.0":
+  version "0.27.0"
+  resolved "https://registry.yarnpkg.com/@opentelemetry/instrumentation-winston/-/instrumentation-winston-0.27.0.tgz#071d11ec77a2781b5edd73d3c19a7124d52b7c9b"
+  integrity sha512-OCbqs0a26Zd3reYZXWnvop2m9OgikIpWXc35RfTgSKkBFuWyi8g6EFik4So3yqLZVY7117pBLK2HicUbAwoGTg==
+  dependencies:
+    "@opentelemetry/instrumentation" "^0.27.0"
+
 "@opentelemetry/instrumentation@0.27.0", "@opentelemetry/instrumentation@^0.27.0":
   version "0.27.0"
   resolved "https://registry.yarnpkg.com/@opentelemetry/instrumentation/-/instrumentation-0.27.0.tgz#8e9864aed24e5b265008ffb14466bdc27ce31897"
@@ -1524,13 +1531,6 @@ axios@^0.21.1:
   integrity sha512-ut5vewkiu8jjGBdqpM44XxjuCjq9LAKeHVmoVfHVzy8eHgxxq8SbAVQNovDA8mVi05kP0Ea/n/UzcSHcTJQfNg==
   dependencies:
     follow-redirects "^1.14.0"
-
-axios@^0.24.0:
-  version "0.24.0"
-  resolved "https://registry.yarnpkg.com/axios/-/axios-0.24.0.tgz#804e6fa1e4b9c5288501dd9dff56a7a0940d20d6"
-  integrity sha512-Q6cWsys88HoPgAaFAVUb0WpPk0O8iTeisR9IMqy9G8AbO4NlpVknrnQS03zzF9PGAWgO3cgletO3VjV/P7VztA==
-  dependencies:
-    follow-redirects "^1.14.4"
 
 babel-jest@^27.4.5:
   version "27.4.5"
@@ -2486,6 +2486,16 @@ eyes@0.1.x:
   resolved "https://registry.yarnpkg.com/eyes/-/eyes-0.1.8.tgz#62cf120234c683785d902348a800ef3e0cc20bc0"
   integrity sha1-Ys8SAjTGg3hdkCNIqADvPgzCC8A=
 
+fabric-ca-client@^2.2.11:
+  version "2.2.11"
+  resolved "https://registry.yarnpkg.com/fabric-ca-client/-/fabric-ca-client-2.2.11.tgz#c53248a9e49315ceed454f388a49ef573ab77b6f"
+  integrity sha512-Tl6ktoYw5ouvz256E/blz+0mWoA6r9L8Pc1BbRffi6ROxuSewdaJEffQjLGAcLG+gJpH2aeviXljWNASqvPIUQ==
+  dependencies:
+    fabric-common "2.2.11"
+    jsrsasign "^10.4.1"
+    url "^0.11.0"
+    winston "^2.4.5"
+
 fabric-common@2.2.10:
   version "2.2.10"
   resolved "https://registry.yarnpkg.com/fabric-common/-/fabric-common-2.2.10.tgz#265aa1da9069da681ec039f99fd042c04b7cea51"
@@ -2494,6 +2504,25 @@ fabric-common@2.2.10:
     callsite "^1.0.0"
     elliptic "^6.5.4"
     fabric-protos "2.2.10"
+    js-sha3 "^0.8.0"
+    jsrsasign "^10.4.1"
+    long "^4.0.0"
+    nconf "^0.11.2"
+    promise-settle "^0.3.0"
+    sjcl "^1.0.8"
+    winston "^2.4.5"
+    yn "^4.0.0"
+  optionalDependencies:
+    pkcs11js "^1.0.6"
+
+fabric-common@2.2.11:
+  version "2.2.11"
+  resolved "https://registry.yarnpkg.com/fabric-common/-/fabric-common-2.2.11.tgz#8c1ba312f507a42853603ae9f41c57d251d518eb"
+  integrity sha512-VDZUXSoTkgXA4axOONCF93DkFzDaqN0wfKnUTa36Y1Dkk5iSZFdH5iqCroAmerrKg71yGlkiBN7DsD7QWl9McA==
+  dependencies:
+    callsite "^1.0.0"
+    elliptic "^6.5.4"
+    fabric-protos "2.2.11"
     js-sha3 "^0.8.0"
     jsrsasign "^10.4.1"
     long "^4.0.0"
@@ -2531,6 +2560,15 @@ fabric-protos@2.2.10:
   version "2.2.10"
   resolved "https://registry.yarnpkg.com/fabric-protos/-/fabric-protos-2.2.10.tgz#50363d5a22e8acada38b88d48deaea0d40fa1906"
   integrity sha512-6ApPgneH/UxsB9QbwPzHEucsCVMnwacyuyHTYxpfj0/ZydWIoNThNsSJEfBdmwhupLG5w5vVup/q/CvhVw3Vmg==
+  dependencies:
+    "@grpc/grpc-js" "^1.3.4"
+    "@grpc/proto-loader" "^0.6.2"
+    protobufjs "^6.11.2"
+
+fabric-protos@2.2.11:
+  version "2.2.11"
+  resolved "https://registry.yarnpkg.com/fabric-protos/-/fabric-protos-2.2.11.tgz#fb0ee623639da485e1b67dfcbd83ec5ab029171d"
+  integrity sha512-haWUubqMLccIyBdmhx4ueKCe7rJgr/zln7iDF+BM7Im48K/a76VmWdddm+QGgWI0Bbk1RA1KfLOdwdb/gSGiSg==
   dependencies:
     "@grpc/grpc-js" "^1.3.4"
     "@grpc/proto-loader" "^0.6.2"
@@ -2656,7 +2694,7 @@ fn.name@1.x.x:
   resolved "https://registry.yarnpkg.com/fn.name/-/fn.name-1.1.0.tgz#26cad8017967aea8731bc42961d04a3d5988accc"
   integrity sha512-GRnmB5gPyJpAhTQdSZTSp9uaPSvl09KoYcMQtsB9rQoOmzs9dH6ffeccH+Z+cv6P68Hu5bC6JjRh4Ah/mHSNRw==
 
-follow-redirects@^1.14.0, follow-redirects@^1.14.4:
+follow-redirects@^1.14.0:
   version "1.14.6"
   resolved "https://registry.yarnpkg.com/follow-redirects/-/follow-redirects-1.14.6.tgz#8cfb281bbc035b3c067d6cd975b0f6ade6e855cd"
   integrity sha512-fhUl5EwSJbbl8AR+uYL2KQDxLkdSjZGR36xy46AO7cOMTrCMON6Sa28FmAnC2tRTDbd/Uuzz3aJBv7EBN7JH8A==
@@ -4461,6 +4499,11 @@ psl@^1.1.33:
   resolved "https://registry.yarnpkg.com/psl/-/psl-1.8.0.tgz#9326f8bcfb013adcc005fdff056acce020e51c24"
   integrity sha512-RIdOzyoavK+hA18OGGWDqUTsCLhtA7IcZ/6NCs4fFJaHBDab+pDDmDIByWFRQJq2Cd7r1OoQxBGKOaztq+hjIQ==
 
+punycode@1.3.2:
+  version "1.3.2"
+  resolved "https://registry.yarnpkg.com/punycode/-/punycode-1.3.2.tgz#9653a036fb7c1ee42342f2325cceefea3926c48d"
+  integrity sha1-llOgNvt8HuQjQvIyXM7v6jkmxI0=
+
 punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.yarnpkg.com/punycode/-/punycode-2.1.1.tgz#b58b010ac40c22c5657616c8d2c2c02c7bf479ec"
@@ -4477,6 +4520,11 @@ qs@^6.9.4:
   integrity sha512-mSIdjzqznWgfd4pMii7sHtaYF8rx8861hBO80SraY5GT0XQibWZWJSid0avzHGkDIZLImux2S5mXO0Hfct2QCw==
   dependencies:
     side-channel "^1.0.4"
+
+querystring@0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/querystring/-/querystring-0.2.0.tgz#b209849203bb25df820da756e747005878521620"
+  integrity sha1-sgmEkgO7Jd+CDadW50cAWHhSFiA=
 
 queue-microtask@^1.2.2:
   version "1.2.3"
@@ -5214,6 +5262,14 @@ uri-js@^4.2.2:
   dependencies:
     punycode "^2.1.0"
 
+url@^0.11.0:
+  version "0.11.0"
+  resolved "https://registry.yarnpkg.com/url/-/url-0.11.0.tgz#3838e97cfc60521eb73c525a8e55bfdd9e2e28f1"
+  integrity sha1-ODjpfPxgUh63PFJajlW/3Z4uKPE=
+  dependencies:
+    punycode "1.3.2"
+    querystring "0.2.0"
+
 util-deprecate@^1.0.1, util-deprecate@~1.0.1:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/util-deprecate/-/util-deprecate-1.0.2.tgz#450d4dc9fa70de732762fbd2d4a28981419a0ccf"
@@ -5349,7 +5405,7 @@ winston-transport@^4.4.0:
     readable-stream "^2.3.7"
     triple-beam "^1.2.0"
 
-winston@^2.4.5:
+"winston2@npm:winston@2.4.5", winston@^2.4.5:
   version "2.4.5"
   resolved "https://registry.yarnpkg.com/winston/-/winston-2.4.5.tgz#f2e431d56154c4ea765545fc1003bd340c95b59a"
   integrity sha512-TWoamHt5yYvsMarGlGEQE59SbJHqGsZV8/lwC+iCcGeAe0vUaOh+Lv6SYM17ouzC/a/LB1/hz/7sxFBtlu1l4A==
@@ -5361,7 +5417,7 @@ winston@^2.4.5:
     isstream "0.1.x"
     stack-trace "0.0.x"
 
-winston@^3.3.2:
+winston@3.3.3, winston@^3.3.2:
   version "3.3.3"
   resolved "https://registry.yarnpkg.com/winston/-/winston-3.3.3.tgz#ae6172042cafb29786afa3d09c8ff833ab7c9170"
   integrity sha512-oEXTISQnC8VlSAKf1KYSSd7J6IWuRPQqDdo8eoRNaYKLvwSb5+79Z3Yi1lrl6KDpU6/VWaxpakDAtb1oQ4n9aw==

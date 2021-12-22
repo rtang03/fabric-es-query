@@ -1,4 +1,4 @@
-version: '2'
+version: '2.1'
 
 networks:
   openplatform:
@@ -15,11 +15,11 @@ services:
       - FABRIC_CA_SERVER_CSR_CN=tls-ca-org0
       - FABRIC_CA_SERVER_CA_NAME=tls-ca-org0
     ports:
-      - 5052:5052
+      - '5052:5052'
     command: sh -c 'fabric-ca-server start -d -b tls-ca-admin:tls-ca-adminPW --cfg.affiliations.allowremove --cfg.identities.allowremove --port 5052'
     volumes:
-      - $SCRIPTS:/setup
-      - $ARTIFACTS:/var/artifacts
+      - ./scripts:/setup
+      - ./artifacts:/var/artifacts
 
   rca-org0:
     extends:
@@ -32,11 +32,11 @@ services:
       - FABRIC_CA_SERVER_CSR_CN=rca-org0
       - FABRIC_CA_SERVER_CA_NAME=rca-org0
     ports:
-      - 5053:5053
+      - '5053:5053'
     command: sh -c 'fabric-ca-server start -d -b rca-org0-admin:rca-org0-adminPW --cfg.affiliations.allowremove --cfg.identities.allowremove --port 5053'
     volumes:
-      - $SCRIPTS:/setup
-      - $ARTIFACTS:/var/artifacts
+      - ./scripts:/setup
+      - ./artifacts:/var/artifacts
 
   orderer0-org0:
     extends:
@@ -57,9 +57,9 @@ services:
       - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/artifacts/crypto-config/Org0MSP/orderer0.org0.com/tls-msp/tlscacerts/tls-0-0-0-0-5052.pem]
       - ORDERER_GENERAL_LISTENPORT=7050
     volumes:
-      - $ARTIFACTS:/var/artifacts
+      - ./artifacts:/var/artifacts
     ports:
-      - 7050:7050
+      - '7050:7050'
 
   orderer1-org0:
     extends:
@@ -80,11 +80,11 @@ services:
       - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/artifacts/crypto-config/Org0MSP/orderer1.org0.com/tls-msp/tlscacerts/tls-0-0-0-0-5052.pem]
       - ORDERER_GENERAL_LISTENPORT=7150
     volumes:
-      - $ARTIFACTS:/var/artifacts
-    #      - $ARTIFACTS/production/Org0MSP/orderer1.org0.com:/var/hyperledger/production
-    #      - $ARTIFACTS/crypto-config/Org0MSP/orderer1.org0.com:/var/artifacts/crypto-config/Org0MSP/orderer1.org0.com
+      - ./artifacts:/var/artifacts
+    #          - ./artifacts/production/Org0MSP/orderer1.org0.com:/var/hyperledger/production
+    #          - ./artifacts/crypto-config/Org0MSP/orderer1.org0.com:/var/artifacts/crypto-config/Org0MSP/orderer1.org0.com
     ports:
-      - 7150:7150
+      - '7150:7150'
 
   orderer2-org0:
     extends:
@@ -105,11 +105,11 @@ services:
       - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/artifacts/crypto-config/Org0MSP/orderer2.org0.com/tls-msp/tlscacerts/tls-0-0-0-0-5052.pem]
       - ORDERER_GENERAL_LISTENPORT=7250
     volumes:
-      - $ARTIFACTS:/var/artifacts
-    #      - $ARTIFACTS/production/Org0MSP/orderer2.org0.com:/var/hyperledger/production
-    #      - $ARTIFACTS/crypto-config/Org0MSP/orderer2.org0.com:/var/artifacts/crypto-config/Org0MSP/orderer2.org0.com
+      - ./artifacts:/var/artifacts
+    #      - ./artifacts/production/Org0MSP/orderer2.org0.com:/var/hyperledger/production
+    #      - ./artifacts/crypto-config/Org0MSP/orderer2.org0.com:/var/artifacts/crypto-config/Org0MSP/orderer2.org0.com
     ports:
-      - 7250:7250
+      - '7250:7250'
 
   orderer3-org0:
     extends:
@@ -130,11 +130,11 @@ services:
       - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/artifacts/crypto-config/Org0MSP/orderer3.org0.com/tls-msp/tlscacerts/tls-0-0-0-0-5052.pem]
       - ORDERER_GENERAL_LISTENPORT=7350
     volumes:
-      - $ARTIFACTS:/var/artifacts
-    #      - $ARTIFACTS/production/Org0MSP/orderer3.org0.com:/var/hyperledger/production
-    #      - $ARTIFACTS/crypto-config/Org0MSP/orderer3.org0.com:/var/artifacts/crypto-config/Org0MSP/orderer3.org0.com
+      - ./artifacts:/var/artifacts
+    #      - ./artifacts/production/Org0MSP/orderer3.org0.com:/var/hyperledger/production
+    #      - ./artifacts/crypto-config/Org0MSP/orderer3.org0.com:/var/artifacts/crypto-config/Org0MSP/orderer3.org0.com
     ports:
-      - 7350:7350
+      - '7350:7350'
 
   orderer4-org0:
     extends:
@@ -155,11 +155,11 @@ services:
       - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/artifacts/crypto-config/Org0MSP/orderer4.org0.com/tls-msp/tlscacerts/tls-0-0-0-0-5052.pem]
       - ORDERER_GENERAL_LISTENPORT=7450
     volumes:
-      - $ARTIFACTS:/var/artifacts
-    #      - $ARTIFACTS/production/Org0MSP/orderer4.org0.com:/var/hyperledger/production
-    #      - $ARTIFACTS/crypto-config/Org0MSP/orderer4.org0.com:/var/artifacts/crypto-config/Org0MSP/orderer4.org0.com
+      - ./artifacts:/var/artifacts
+    #      - ./artifacts/production/Org0MSP/orderer4.org0.com:/var/hyperledger/production
+    #      - ./artifacts/crypto-config/Org0MSP/orderer4.org0.com:/var/artifacts/crypto-config/Org0MSP/orderer4.org0.com
     ports:
-      - 7450:7450
+      - '7450:7450'
 
   cli:
     extends:
@@ -176,9 +176,9 @@ services:
     working_dir: /opt/gopath/src/github.com/hyperledger/fabric/org1
     command: sh
     volumes:
-      - $ARTIFACTS:/var/artifacts
-      - $SCRIPTS:/setup
-      - $CONFIG:/config
+      - ./artifacts:/var/artifacts
+      - ./scripts:/setup
+      - ./config:/config
       - ./core.yaml:/etc/hyperledger/fabric/core.yaml
 
   # ORG1
@@ -194,11 +194,11 @@ services:
       - FABRIC_CA_SERVER_CSR_CN=rca-org1
       - FABRIC_CA_SERVER_CA_NAME=rca-org1
     ports:
-      - 5054:5054
+      - '5054:5054'
     command: sh -c 'fabric-ca-server start -d -b rca-org1-admin:rca-org1-adminPW --cfg.affiliations.allowremove  --cfg.identities.allowremove --port 5054'
     volumes:
-      - $SCRIPTS:/setup
-      - $ARTIFACTS:/var/artifacts
+      - ./scripts:/setup
+      - ./artifacts:/var/artifacts
 
   peer0-org1:
     extends:
@@ -214,20 +214,19 @@ services:
       - CORE_PEER_TLS_CERT_FILE=/var/artifacts/crypto-config/Org1MSP/peer0.org1.net/tls-msp/signcerts/cert.pem
       - CORE_PEER_TLS_KEY_FILE=/var/artifacts/crypto-config/Org1MSP/peer0.org1.net/tls-msp/keystore/key.pem
       - CORE_PEER_TLS_ROOTCERT_FILE=/var/artifacts/crypto-config/Org1MSP/peer0.org1.net/tls-msp/tlscacerts/tls-0-0-0-0-5052.pem
-      #     - CORE_PEER_GOSSIP_BOOTSTRAP=peer1-org1:7151
-      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0-org1:7051
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer1-org1:7151
       - CORE_PEER_GOSSIP_ENDPOINT=peer0-org1:7051
       - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0-org1:7051
       - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
-#      - CORE_OPERATIONS_LISTENADDRESS=peer0-org1:9443
-#      - CORE_METRICS_PROVIDER=prometheus
+      - CORE_OPERATIONS_LISTENADDRESS=peer0-org1:9443
+      - CORE_METRICS_PROVIDER=prometheus
     working_dir: /opt/gopath/src/github.com/hyperledger/fabric/Org1MSP/peer0.org1.net
     volumes:
       - /var/run:/host/var/run
-      - $ARTIFACTS:/var/artifacts
-      - $CONFIG/bin:/builders/external/bin
+      - ./artifacts:/var/artifacts
+      - ./config/bin:/builders/external/bin
       - ./core.yaml:/etc/hyperledger/fabric/core.yaml
     ports:
-      - 7051:7051
-      - 7053:7053
-#      - 9443:9443
+      - '7051:7051'
+      - '7053:7053'
+      - '9443:9443'

@@ -17,7 +17,6 @@ const makeRequest = () => {
 
   void context.with(trace.setSpan(ROOT_CONTEXT, span), async () => {
     try {
-      // const res = await axios.get('http://localhost:8080/run_test');
       const res = await fetch('http://localhost:8080/run_test');
 
       console.log('status:', res.statusText);

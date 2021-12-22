@@ -17,11 +17,11 @@ services:
       - FABRIC_CA_SERVER_CSR_CN=rca-org2
       - FABRIC_CA_SERVER_CA_NAME=rca-org2
     ports:
-      - 5055:5055
+      - '5055:5055'
     command: sh -c 'fabric-ca-server start -d -b rca-org2-admin:rca-org2-adminPW --cfg.affiliations.allowremove  --cfg.identities.allowremove --port 5055'
     volumes:
-      - $SCRIPTS:/setup
-      - $ARTIFACTS:/var/artifacts
+      - ./scripts:/setup
+      - ./artifacts:/var/artifacts
 
   peer0-org2:
     extends:
@@ -45,9 +45,9 @@ services:
     working_dir: /opt/gopath/src/github.com/hyperledger/fabric/Org2MSP/peer0.org2.net
     volumes:
       - /var/run:/host/var/run
-      - $ARTIFACTS:/var/artifacts
-      - $CONFIG/bin:/builders/external/bin
+      - ./artifacts:/var/artifacts
+      - ./config/bin:/builders/external/bin
       - ./core.yaml:/etc/hyperledger/fabric/core.yaml
     ports:
-      - 7251:7251
-      - 7253:7253
+      - '7251:7251'
+      - '7253:7253'

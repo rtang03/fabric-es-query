@@ -1,0 +1,66 @@
+{
+  "name": "test-network",
+  "version": "1.0.0",
+  "client": {
+    "tlsEnable": true,
+    "clientTlsIdentity": "exploreradmin",
+    "caCredential": {
+      "id": "rca-org1-admin",
+      "password": "rca-org1-adminPW"
+    },
+    "adminCredential": {
+      "id": "exploreradmin",
+      "password": "exploreradminpw"
+    },
+    "enableAuthentication": true,
+    "organization": "Org1MSP",
+    "connection": {
+      "timeout": {
+        "peer": {
+          "endorser": "300"
+        },
+        "orderer": "300"
+      }
+    }
+  },
+  "channels": {
+    "loanapp": {
+      "peers": {
+        "peer0": {}
+      }
+    }
+  },
+  "organizations": {
+    "Org1MSP": {
+      "mspid": "Org1MSP",
+      "adminPrivateKey": {
+        "path": "/var/artifacts/crypto-config/Org1MSP/admin/msp/keystore/key.pem"
+      },
+      "peers": ["peer0"],
+      "signedCert": {
+        "path": "/var/artifacts/crypto-config/Org1MSP/admin/msp/signcerts/cert.pem"
+      },
+      "certificateAuthorities": ["ca1"]
+    }
+  },
+  "peers": {
+    "peer0": {
+      "tlsCACerts": {
+        "path": "/var/artifacts/crypto-config/Org1MSP/peer0.org1.net/tls-msp/tlscacerts/tls-0-0-0-0-5052.pem"
+      },
+      "url": "grpcs://peer0-org1:7051"
+    }
+  },
+  "certificateAuthorities": {
+    "ca1": {
+      "url": "https://rca-org1:5054",
+      "httpOptions": {
+        "verify": false
+      },
+      "tlsCACerts": {
+        "path": "/var/artifacts/crypto-config/Org1MSP/peer0.org1.net/tls-msp/tlscacerts/tls-0-0-0-0-5052.pem"
+      },
+      "caName": "rca-org1"
+    }
+  }
+}

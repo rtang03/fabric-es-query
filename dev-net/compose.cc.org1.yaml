@@ -5,7 +5,7 @@ networks:
 
 services:
   eventstore-cc1:
-    image: $CC_IMAGE
+    image: ghcr.io/rtang03/eventstore-cc:0.0.6
     container_name: eventstore-cc1
     environment:
       - CHAINCODE_ADDRESS="0.0.0.0:7052"

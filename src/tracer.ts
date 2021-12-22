@@ -6,12 +6,12 @@ import api, {
   SamplingDecision,
   SpanKind,
   trace,
-  context,
 } from '@opentelemetry/api';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { AlwaysOnSampler } from '@opentelemetry/core';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
+import { WinstonInstrumentation } from '@opentelemetry/instrumentation-winston';
 import { JaegerPropagator } from '@opentelemetry/propagator-jaeger';
 import { Resource } from '@opentelemetry/resources';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
@@ -21,7 +21,7 @@ import {
   SemanticResourceAttributes,
 } from '@opentelemetry/semantic-conventions';
 
-diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.VERBOSE);
+diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
 const filterSampler = (filterFn, parent) => ({
   shouldSample: (ctx, tid, spanName, spanKind, attr, links) =>
@@ -43,14 +43,8 @@ export const getTracer = (serviceName) => {
   });
 
   // Configure span processor to send spans to the exporter
-  tracerProvider.addSpanProcessor(
-    new BatchSpanProcessor(
-      new OTLPTraceExporter()
-      // new JaegerExporter({
-      //   endpoint: 'http://localhost:14268/api/traces',
-      // })
-    )
-  );
+  tracerProvider.addSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter()));
+
   const propagator = new JaegerPropagator(); // 'uber-trace-id'
 
   // Initialize the OpenTelemetry APIs to use the NodeTracerProvider bindings
@@ -58,17 +52,17 @@ export const getTracer = (serviceName) => {
 
   registerInstrumentations({
     tracerProvider,
-    instrumentations: [getNodeAutoInstrumentations()],
+    instrumentations: [
+      getNodeAutoInstrumentations(),
+      new WinstonInstrumentation({
+        logHook: (record, span) => {
+          record['resource.service.name'] = tracerProvider.resource.attributes['service.name'];
+        },
+      }),
+    ],
   });
 
-  return trace.getTracer('express-example');
-};
-
-export const addTraceId = (req, res, next) => {
-  const currentSpan = trace.getSpan(context.active());
-  const spanContext = currentSpan.spanContext();
-  req.traceId = spanContext && spanContext.traceId;
-  next();
+  return trace.getTracer('Synchronizer');
 };
 
 export default getTracer('my-app');

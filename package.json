@@ -1,13 +1,25 @@
 {
   "name": "fabric-es-query",
   "version": "0.1.0",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "description": "queryhandler serverice for cqrs",
   "license": "BSD-3-Clause-Clear",
+  "author": "Ross Tang",
+  "homepage": "https://github.com/rtang03/fabric-es-query",
+  "bugs": {
+    "url": "https://github.com/rtang03/fabric-es-query/issues"
+  },
   "scripts": {
     "clean": "rimraf dist",
     "build": "yarn clean && tsc",
+    "lint": "eslint --max-warnings 10 'src/**/*.{js,ts}'",
+    "test:fabricgwateway": "jest fabricGateway.test",
+    "test:fabricgwateway-debug": "DEBUG=fabric:gateway jest fabricGateway.test",
+    "test:fabricgwateway2": "jest --forceExit --detectOpenHandles fabricGateway.test",
     "server": "node --require './dist/tracing.js' ./dist/app.js",
     "client": "node --experimental-modules ./dist/client.js",
-    "start": "node --require './dist/tracing.js' ./dist/app.js"
+    "start": "node ./dist/sync.js"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.0.3",
@@ -17,6 +29,7 @@
     "@opentelemetry/exporter-prometheus": "^0.27.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.27.0",
     "@opentelemetry/instrumentation-fetch": "^0.27.0",
+    "@opentelemetry/instrumentation-winston": "^0.27.0",
     "@opentelemetry/propagator-jaeger": "^1.0.1",
     "@opentelemetry/resources": "^1.0.1",
     "@opentelemetry/sdk-node": "^0.27.0",
@@ -25,11 +38,15 @@
     "debug": "^4.3.3",
     "dotenv": "^10.0.0",
     "express": "^4.17.1",
+    "fabric-ca-client": "^2.2.11",
     "fabric-contract-api": "^2.2.2",
     "fabric-network": "^2.2.10",
     "isomorphic-unfetch": "^3.1.0",
+    "js-yaml": "^4.1.0",
     "lodash": "^4.17.21",
-    "rimraf": "^3.0.2"
+    "rimraf": "^3.0.2",
+    "winston": "3.3.3",
+    "winston2": "npm:winston@2.4.5"
   },
   "devDependencies": {
     "@types/debug": "^4.1.7",

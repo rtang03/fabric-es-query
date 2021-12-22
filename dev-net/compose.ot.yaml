@@ -1,5 +1,5 @@
 # e.g. https://github.com/vegasbrianc/prometheus/blob/master/docker-compose.yml
-version: "3"
+version: "2.1"
 volumes:
   prometheus_data: {}
   grafana_data: {}
@@ -56,19 +56,6 @@ services:
       - "55681:55681"
     depends_on:
       - jaeger-all-in-one
-
-  explorer-db:
-    networks:
-      - openplatform
-    container_name: explorer-db
-    image: hyperledger/explorer-db:1.1.8
-    environment:
-      - DATABASE_DATABASE=fabricexplorer
-      - DATABASE_USERNAME=hppoc
-      - DATABASE_PASSWORD=password
-    volumes:
-      - ./artifacts/postgres:/var/lib/postgresql/data
-      - ./scripts/createdb.sh:/docker-entrypoint-initdb.d/createdb.sh
 
 #  postgres:
 #    # https://github.com/bitnami/bitnami-docker-postgresql#configuration
