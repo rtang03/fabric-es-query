@@ -37,8 +37,8 @@ orderers:
 
 peers:
   peer0-org1:
-    url: grpcs://localhost:7151
-    eventUrl: grpcs://localhost:7153
+    url: grpcs://localhost:7051
+    eventUrl: grpcs://localhost:7053
     tlsCACerts:
       path: dev-net/artifacts/crypto-config/Org1MSP/peer0.org1.net/tls-msp/tlscacerts/tls-0-0-0-0-5052.pem
     grpcOptions:

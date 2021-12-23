@@ -53,6 +53,20 @@ describe('fabricGateway tests', () => {
   it('initialize', async () => {
     await fg.initialize();
 
-    expect(fg.getInfo().isCaAdminInWallet).toBeTruthy();
+    const { isCaAdminEnrolled, isCaAdminInWallet } = fg.getInfo();
+
+    expect(isCaAdminEnrolled).toBeTruthy();
+    expect(isCaAdminInWallet).toBeTruthy();
   });
+
+  it('queryChannels', async () =>
+    fg
+      .queryChannels()
+      .then((channels) => expect(channels).toEqual({ channels: [{ channel_id: 'loanapp' }] })));
+
+  it('getIdentityInfo', async () =>
+    fg.getIdentityInfo(process.env.ADMIN_ID).then(({ type, mspId }) => {
+      expect(type).toEqual('X.509');
+      expect(mspId).toEqual('Org1MSP');
+    }));
 });

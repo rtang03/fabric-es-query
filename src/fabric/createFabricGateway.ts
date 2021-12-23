@@ -3,7 +3,18 @@ import path from 'path';
 import Debug from 'debug';
 import FabricCAServices, { IEnrollResponse } from 'fabric-ca-client';
 import { User } from 'fabric-common';
-import { Gateway, GatewayOptions, Identity, Wallet, Wallets, X509Identity } from 'fabric-network';
+import {
+  Gateway,
+  GatewayOptions,
+  Identity,
+  Network,
+  Wallet,
+  Wallets,
+  X509Identity,
+  DefaultEventHandlerStrategies,
+  DefaultQueryHandlerStrategies,
+} from 'fabric-network';
+import fabprotos from 'fabric-protos';
 import winston from 'winston';
 import type { ConnectionProfile, FabricGateway } from '../types';
 
@@ -26,17 +37,31 @@ export const createFabricGateway: (
   let isCaAdminInWallet: boolean;
   let caAdminUserContext: User;
   let isGatewayConnected: boolean;
+  let network: Network;
 
   logger.info('Loading configuration');
 
   const NS = 'fabric:gateway';
   const debug = Debug(NS);
-  const caName = profile.organizations[profile.client.organization].certificateAuthorities[0];
-  const caUrl = profile.certificateAuthorities[caName].url;
-  const caAdminId = profile.certificateAuthorities[caName].registrar[0].enrollId;
-  const caAdminSecret = profile.certificateAuthorities[caName].registrar[0].enrollSecret;
-  const mspId = profile.organizations[profile.client.organization].mspid;
   const gateway = new Gateway();
+
+  // Loading configuration
+  const caName = profile.organizations?.[profile.client?.organization]?.certificateAuthorities[0];
+  const caUrl = profile.certificateAuthorities?.[caName]?.url;
+  const caAdminId = profile.certificateAuthorities?.[caName]?.registrar[0]?.enrollId;
+  const caAdminSecret = profile.certificateAuthorities?.[caName]?.registrar[0]?.enrollSecret;
+  const mspId = profile.organizations?.[profile.client?.organization]?.mspid;
+  const defaultChannel = Object.keys(profile.channels)?.[0];
+
+  !caName && logger.error('missing caName');
+  !caUrl && logger.error('missing caUrl');
+  !caAdminId && logger.error('missing caAdminId');
+  !caAdminSecret && logger.error('missing caAdminSecret');
+  !mspId && logger.error('missing mspId');
+  !defaultChannel && logger.error('missing channel');
+
+  if (!caName || !caUrl || !caAdminId || !caAdminSecret || !mspId || !defaultChannel)
+    throw new Error('fail to load connection profile');
 
   /* GET USER CONTEXT */
   const getUserContext = async (user: string) => {
@@ -63,6 +88,13 @@ export const createFabricGateway: (
     enrollmentID: string,
     enrollmentSecret: string
   ): Promise<IEnrollResponse> => {
+    const identity = await wallet.get(enrollmentID);
+
+    if (identity) {
+      logger.error(`${enrollmentID} already exists, cannot enroll`);
+      return;
+    }
+
     const enrollment = await ca.enroll({
       enrollmentID,
       enrollmentSecret,
@@ -127,6 +159,7 @@ export const createFabricGateway: (
       logger.info(`caName: ${caName}`);
       logger.info(`caUrl: ${caUrl}`);
       logger.info(`msp: ${mspId}`);
+      logger.info(`defaultChannel: ${defaultChannel}`);
 
       debug('wallletPath: %s', walletPath);
       // debug('connectionProfile: %O', profile);
@@ -147,7 +180,19 @@ export const createFabricGateway: (
       return info;
     },
     /* INITIALIZE */
-    initialize: async ({ eventHandlerOptions, queryHandlerOptions, connectionOptions }) => {
+    initialize: async (
+      option = {
+        eventHandlerOptions: {
+          commitTimeout: 300,
+          endorseTimeout: 30,
+          strategy: DefaultEventHandlerStrategies.PREFER_MSPID_SCOPE_ALLFORTX,
+        },
+        queryHandlerOptions: {
+          timeout: 10,
+          strategy: DefaultQueryHandlerStrategies.PREFER_MSPID_SCOPE_SINGLE,
+        },
+      }
+    ) => {
       logger.info('=== initialize() ===');
 
       try {
@@ -180,9 +225,8 @@ export const createFabricGateway: (
           identity: adminId,
           wallet,
           discovery: { enabled: false },
-          eventHandlerOptions,
-          queryHandlerOptions,
-          'connection-options': connectionOptions,
+          eventHandlerOptions: option.eventHandlerOptions,
+          queryHandlerOptions: option.queryHandlerOptions,
         };
 
         await gateway.connect(profile, options);
@@ -190,6 +234,10 @@ export const createFabricGateway: (
         logger.info('🔥 gatwway connected');
 
         isGatewayConnected = true;
+
+        network = await gateway.getNetwork(defaultChannel);
+
+        logger.info('get network');
       } catch (err) {
         logger.error(err);
         return false;
@@ -198,6 +246,7 @@ export const createFabricGateway: (
     },
     /* REGISTER */
     registerNewUser: async (enrollmentID, enrollmentSecret) => {
+      logger.info('=== registerNewUser() ===');
       try {
         caAdminUserContext = await getUserContext(caAdminId);
 
@@ -214,5 +263,27 @@ export const createFabricGateway: (
     },
     /* DISCONNECT */
     disconnect: () => gateway.disconnect(),
+    /* IDENTITY INFO */
+    getIdentityInfo: async (label) => {
+      logger.info('=== getIdentityInfo() ===');
+
+      // remove privateKey from this api
+      return wallet.get(label).then((identity: any) => ({
+        type: identity?.type,
+        mspId: identity?.mspId,
+        credentials: { certificate: identity?.credentials?.certificate },
+      }));
+    },
+    /* QUERY CHANNEL */
+    queryChannels: async () => {
+      logger.info('=== queryChannels() ===');
+      const contract = network.getContract('cscc');
+      const result = await contract.evaluateTransaction('GetChannels');
+      const ressultJson = fabprotos.protos.ChannelQueryResponse.decode(result);
+
+      debug('queryChannels: %O', ressultJson);
+
+      return ressultJson;
+    },
   };
 };

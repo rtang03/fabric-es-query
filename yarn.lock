@@ -2565,7 +2565,7 @@ fabric-protos@2.2.10:
     "@grpc/proto-loader" "^0.6.2"
     protobufjs "^6.11.2"
 
-fabric-protos@2.2.11:
+fabric-protos@2.2.11, fabric-protos@^2.2.11:
   version "2.2.11"
   resolved "https://registry.yarnpkg.com/fabric-protos/-/fabric-protos-2.2.11.tgz#fb0ee623639da485e1b67dfcbd83ec5ab029171d"
   integrity sha512-haWUubqMLccIyBdmhx4ueKCe7rJgr/zln7iDF+BM7Im48K/a76VmWdddm+QGgWI0Bbk1RA1KfLOdwdb/gSGiSg==

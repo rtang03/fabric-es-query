@@ -41,6 +41,7 @@
     "fabric-ca-client": "^2.2.11",
     "fabric-contract-api": "^2.2.2",
     "fabric-network": "^2.2.10",
+    "fabric-protos": "^2.2.11",
     "isomorphic-unfetch": "^3.1.0",
     "js-yaml": "^4.1.0",
     "lodash": "^4.17.21",
