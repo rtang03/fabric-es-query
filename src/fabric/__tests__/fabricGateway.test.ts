@@ -52,5 +52,7 @@ describe('fabricGateway tests', () => {
 
   it('initialize', async () => {
     await fg.initialize();
+
+    expect(fg.getInfo().isCaAdminInWallet).toBeTruthy();
   });
 });
