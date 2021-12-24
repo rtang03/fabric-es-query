@@ -3,3 +3,4 @@ export * from './typeGuard';
 export * from './constants';
 export * from './waitForSecond';
 export * from './errors';
+export * from './createMetricServer';

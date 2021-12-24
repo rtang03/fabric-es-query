@@ -39,11 +39,6 @@ services:
       - LOG_LEVEL_CONSOLE=info
       - LOG_CONSOLE_STDOUT=true
       - DISCOVERY_AS_LOCALHOST=false
-    #    command:
-    #      - sh
-    #      - -c
-    #      - |
-    #        sleep 86400
     volumes:
       - ./explorer/config.json:/opt/explorer/app/platform/fabric/config.json
       - ./explorer/connection-profile:/opt/explorer/app/platform/fabric/connection-profile

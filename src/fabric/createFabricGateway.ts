@@ -17,18 +17,23 @@ import {
 import fabprotos from 'fabric-protos';
 import winston from 'winston';
 import type { ConnectionProfile, FabricGateway } from '../types';
+import type { Meters } from '../utils';
+
+const { BlockDecoder } = require('fabric-common');
 
 export type CreateFabricGatewayOption = {
   adminSecret: string;
   adminId: string;
   walletPath: string;
   logger: winston.Logger;
+  metricsOn?: boolean;
+  meters?: Partial<Meters>;
 };
 
 export const createFabricGateway: (
   profile: ConnectionProfile,
   option: CreateFabricGatewayOption
-) => FabricGateway = (profile, { adminId, adminSecret, walletPath, logger }) => {
+) => FabricGateway = (profile, { adminId, adminSecret, walletPath, logger, meters, metricsOn }) => {
   let wallet: Wallet;
   let identity: Identity;
   let ca: FabricCAServices;
@@ -38,6 +43,7 @@ export const createFabricGateway: (
   let caAdminUserContext: User;
   let isGatewayConnected: boolean;
   let network: Network;
+  let channelEventHubs: any;
 
   logger.info('Loading configuration');
 
@@ -151,6 +157,7 @@ export const createFabricGateway: (
   /* END */
 
   return {
+    getDefaultChannelName: () => defaultChannel,
     /* INFO */
     getInfo: () => {
       logger.info('=== getInfo() ===');
@@ -191,19 +198,22 @@ export const createFabricGateway: (
           timeout: 10,
           strategy: DefaultQueryHandlerStrategies.PREFER_MSPID_SCOPE_SINGLE,
         },
+        connectionOptions: undefined,
       }
     ) => {
       logger.info('=== initialize() ===');
 
+      const debugInit = Debug(`${NS}:initialize`);
+
       try {
         const fullPath = path.join(process.cwd(), walletPath);
 
-        debug('wallet fullPath: %s', fullPath);
+        debugInit('wallet fullPath: %s', fullPath);
 
         wallet = await Wallets.newFileSystemWallet(fullPath);
 
-        debug('Filesystem wallet found');
-        debug('adminId: %s', caAdminId);
+        debugInit('Filesystem wallet found');
+        debugInit('adminId: %s', caAdminId);
 
         identity = await wallet.get(caAdminId);
 
@@ -220,6 +230,8 @@ export const createFabricGateway: (
         // Step 2: enroll organization-admin
         await enrollAndSave(adminId, adminSecret);
 
+        metricsOn && meters.enrollCount.add(2);
+
         // Step 3:
         const options: GatewayOptions = {
           identity: adminId,
@@ -227,6 +239,7 @@ export const createFabricGateway: (
           discovery: { enabled: false },
           eventHandlerOptions: option.eventHandlerOptions,
           queryHandlerOptions: option.queryHandlerOptions,
+          'connection-options': option.connectionOptions,
         };
 
         await gateway.connect(profile, options);
@@ -237,12 +250,12 @@ export const createFabricGateway: (
 
         network = await gateway.getNetwork(defaultChannel);
 
-        logger.info('get network');
+        logger.info('🔥 network returned');
+        return true;
       } catch (err) {
-        logger.error(err);
-        return false;
+        logger.error(`fail to initialize`, err);
+        return null;
       }
-      return true;
     },
     /* REGISTER */
     registerNewUser: async (enrollmentID, enrollmentSecret) => {
@@ -254,12 +267,14 @@ export const createFabricGateway: (
           { affiliation: '', enrollmentID, enrollmentSecret, role: 'client' },
           caAdminUserContext
         );
+
         logger.info(`ca.register new ${enrollmentID} complete`);
-      } catch (err) {
-        logger.error(err);
-        return false;
+
+        return true;
+      } catch (e) {
+        logger.error(`fail to register new user ${enrollmentID} : `, e);
+        return null;
       }
-      return true;
     },
     /* DISCONNECT */
     disconnect: () => gateway.disconnect(),
@@ -267,23 +282,81 @@ export const createFabricGateway: (
     getIdentityInfo: async (label) => {
       logger.info('=== getIdentityInfo() ===');
 
-      // remove privateKey from this api
-      return wallet.get(label).then((identity: any) => ({
-        type: identity?.type,
-        mspId: identity?.mspId,
-        credentials: { certificate: identity?.credentials?.certificate },
-      }));
+      try {
+        const result: any = await wallet.get(label);
+
+        if (!result) return null;
+
+        const identity = {
+          type: result?.type,
+          mspId: result?.mspId,
+          credentials: { certificate: result?.credentials?.certificate },
+        };
+
+        Debug(`${NS}:getIdentityInfo`)('getIdentityInfo, %O', identity);
+
+        return identity;
+      } catch (e) {
+        logger.error(`fail to getIdentityInfo ${label} : `, e);
+        return null;
+      }
     },
     /* QUERY CHANNEL */
     queryChannels: async () => {
       logger.info('=== queryChannels() ===');
-      const contract = network.getContract('cscc');
-      const result = await contract.evaluateTransaction('GetChannels');
-      const ressultJson = fabprotos.protos.ChannelQueryResponse.decode(result);
 
-      debug('queryChannels: %O', ressultJson);
+      try {
+        const contract = network.getContract('cscc');
+        const result = await contract.evaluateTransaction('GetChannels');
+        const resultJson = fabprotos.protos.ChannelQueryResponse.decode(result);
 
-      return ressultJson;
+        Debug(`${NS}:queryChannels`)('queryChannels: %O', resultJson);
+
+        return resultJson;
+      } catch (e) {
+        logger.error(`fail to queryChannels: `, e);
+        return null;
+      }
+    },
+    /* QUERY BLOCK */
+    queryBlock: async (channelName, blockNum) => {
+      logger.info('=== queryChannels() ===');
+
+      try {
+        const contract = network.getContract('qscc');
+        const resultByte = await contract.evaluateTransaction(
+          'GetBlockByNumber',
+          channelName,
+          String(blockNum)
+        );
+        const resultJson = BlockDecoder.decode(resultByte);
+
+        Debug(`${NS}:queryBlock`)('queryBlock, %O', resultJson);
+
+        metricsOn && meters.queryBlockCount.add(1);
+
+        return resultJson;
+      } catch (e) {
+        logger.error(`Failed to get block ${blockNum} from channel ${channelName} : `, e);
+        return null;
+      }
+    },
+    /* QUERY CHAIN HEIGHT*/
+    queryChainInfo: async (channelName) => {
+      logger.info('=== queryChainInfo() ===');
+
+      try {
+        const contract = network.getContract('qscc');
+        const resultByte = await contract.evaluateTransaction('GetChainInfo', channelName);
+        const resultJson = fabprotos.common.BlockchainInfo.decode(resultByte);
+
+        Debug(`${NS}:queryChainInfo`)('queryChainInfo, %O', resultJson);
+
+        return resultJson;
+      } catch (e) {
+        logger.error(`fail to queryChainInfo`);
+        return null;
+      }
     },
   };
 };
