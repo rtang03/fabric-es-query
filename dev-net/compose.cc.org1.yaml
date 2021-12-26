@@ -1,16 +1,17 @@
-version: '2'
+version: '2.1'
 
 networks:
   openplatform:
 
 services:
-  eventstore-cc1:
+  peer0org1.chaincode:
     image: ghcr.io/rtang03/eventstore-cc:0.0.6
-    container_name: eventstore-cc1
+    container_name: peer0org1.chaincode
+    hostname: peer0org1.chaincode
     environment:
-      - CHAINCODE_ADDRESS="0.0.0.0:7052"
+      - CHAINCODE_ADDRESS="peer0org1.chaincode:9999"
       - CHAINCODE_CCID
     ports:
-      - '7052:7052'
+      - '9999'
     networks:
       - openplatform

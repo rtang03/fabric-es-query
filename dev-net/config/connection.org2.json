@@ -1,5 +1,5 @@
 {
-  "address": "eventstore-cc2:7252",
+  "address": "peer0org2.chaincode:9999",
   "dial_timeout": "10s",
   "tls_required": false,
   "client_auth_required": false,

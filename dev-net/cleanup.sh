@@ -11,7 +11,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 #COMPOSE=$COMPOSE_ALL
-COMPOSE="$COMPOSE_2 -f compose.cc.org1.yaml -f compose.cc.org2.yaml"
+COMPOSE="$COMPOSE_2 -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.explorer.yaml -f compose.ot.yaml"
 CLEAN_CC_IMG=0
 case $# in
   0)
@@ -59,7 +59,7 @@ if [ ! -z "$LOGSPOUT" ]; then
   docker rm -f logspout
 fi
 
-docker-compose $COMPOSE down
+docker-compose $COMPOSE down --remove-orphans
 sleep 1
 
 EXITED=`docker ps -aq -f status=exited`

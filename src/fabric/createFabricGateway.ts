@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import api, { Span, Tracer } from '@opentelemetry/api';
 import Debug from 'debug';
 import FabricCAServices, { IEnrollResponse } from 'fabric-ca-client';
 import { User } from 'fabric-common';
@@ -13,6 +14,7 @@ import {
   X509Identity,
   DefaultEventHandlerStrategies,
   DefaultQueryHandlerStrategies,
+  BlockListener,
 } from 'fabric-network';
 import fabprotos from 'fabric-protos';
 import winston from 'winston';
@@ -28,12 +30,16 @@ export type CreateFabricGatewayOption = {
   logger: winston.Logger;
   metricsOn?: boolean;
   meters?: Partial<Meters>;
+  tracer?: Tracer;
 };
 
 export const createFabricGateway: (
   profile: ConnectionProfile,
   option: CreateFabricGatewayOption
-) => FabricGateway = (profile, { adminId, adminSecret, walletPath, logger, meters, metricsOn }) => {
+) => FabricGateway = (
+  profile,
+  { adminId, adminSecret, walletPath, logger, meters, metricsOn, tracer }
+) => {
   let wallet: Wallet;
   let identity: Identity;
   let ca: FabricCAServices;
@@ -43,7 +49,7 @@ export const createFabricGateway: (
   let caAdminUserContext: User;
   let isGatewayConnected: boolean;
   let network: Network;
-  let channelEventHubs: any;
+  let channelEventHubs: Record<string, BlockListener>;
 
   logger.info('Loading configuration');
 
@@ -51,12 +57,13 @@ export const createFabricGateway: (
   const debug = Debug(NS);
   const gateway = new Gateway();
 
-  // Loading configuration
+  /* === LOADING CONFIGURATION === */
   const caName = profile.organizations?.[profile.client?.organization]?.certificateAuthorities[0];
   const caUrl = profile.certificateAuthorities?.[caName]?.url;
   const caAdminId = profile.certificateAuthorities?.[caName]?.registrar[0]?.enrollId;
   const caAdminSecret = profile.certificateAuthorities?.[caName]?.registrar[0]?.enrollSecret;
   const mspId = profile.organizations?.[profile.client?.organization]?.mspid;
+  const channels = Object.keys(profile.channels);
   const defaultChannel = Object.keys(profile.channels)?.[0];
 
   !caName && logger.error('missing caName');
@@ -69,7 +76,7 @@ export const createFabricGateway: (
   if (!caName || !caUrl || !caAdminId || !caAdminSecret || !mspId || !defaultChannel)
     throw new Error('fail to load connection profile');
 
-  /* GET USER CONTEXT */
+  /* === GET USER CONTEXT === */
   const getUserContext = async (user: string) => {
     const identity = await wallet.get(user);
 
@@ -81,15 +88,7 @@ export const createFabricGateway: (
   };
   /* END */
 
-  /* RETRIEVE ORG ADMIN PEM & PRIVATEKEY */
-  const getOrgAdminPemOrKey = (kind: 'adminPrivateKey' | 'signedCert'): string => {
-    logger.info(`getOrgAdminPemOrKey`);
-    const _path = profile.organizations?.[profile?.client?.organization][kind]?.path;
-    return _path ? fs.readFileSync(path.join(process.cwd(), _path), 'utf8') : '';
-  };
-  /* END */
-
-  /* ENROLL AND SAVE TO WALLET */
+  /* === ENROLL AND SAVE TO WALLET === */
   const enrollAndSave = async (
     enrollmentID: string,
     enrollmentSecret: string
@@ -105,6 +104,9 @@ export const createFabricGateway: (
       enrollmentID,
       enrollmentSecret,
     });
+
+    metricsOn && meters.enrollCount.add(1);
+
     const { certificate, key } = enrollment;
 
     logger.info(`enrollment ${enrollmentID} complete`);
@@ -121,7 +123,7 @@ export const createFabricGateway: (
   };
   /* END */
 
-  /* RETRIEVE TLSCA PEM */
+  /* === RETRIEVE TLSCA PEM === */
   const getTlsCACertsPem = (ca: string): string => {
     logger.info(`getTlsCACertsPem: ${ca}`);
 
@@ -139,8 +141,8 @@ export const createFabricGateway: (
   };
   /* END */
 
-  /* ENROLL CA */
-  const enrollCaIdentity = async (id, secret) => {
+  /* === ENROLL CA === */
+  const enrollCaIdentity = async (id) => {
     logger.info(`enrollCaIdentity ${id} - caName: ${caName}, caUrl ${caUrl}`);
 
     const trustedRoots = Buffer.from(getTlsCACertsPem(caName));
@@ -153,6 +155,28 @@ export const createFabricGateway: (
     caRootCert = rootCertificate;
     isCaAdminEnrolled = true;
     isCaAdminInWallet = true;
+  };
+  /* END */
+
+  /* === CREATE CHANNEL EVENT HUB === */
+  const createChannelEventHub = async (channelName: string) => {
+    const currentNetwork =
+      channelName === defaultChannel ? network : await gateway.getNetwork(channelName);
+    const listener = await currentNetwork.addBlockListener(
+      async (event) => {
+        // TODO: DO WHAT??
+        // Skip first block, it is process by peer event hub
+        // if (!(event.blockNumber.low === 0 && event.blockNumber.high === 0)) {
+        //   const noDiscovery = false;
+        //   await this.fabricServices.processBlockEvent(this.client, event.blockData, noDiscovery);
+        // }
+      },
+      { type: 'full' }
+    );
+
+    logger.info(`block listener added ${channelName}`);
+
+    channelEventHubs[channelName] = listener;
   };
   /* END */
 
@@ -187,33 +211,40 @@ export const createFabricGateway: (
       return info;
     },
     /* INITIALIZE */
-    initialize: async (
-      option = {
-        eventHandlerOptions: {
-          commitTimeout: 300,
-          endorseTimeout: 30,
-          strategy: DefaultEventHandlerStrategies.PREFER_MSPID_SCOPE_ALLFORTX,
-        },
-        queryHandlerOptions: {
-          timeout: 10,
-          strategy: DefaultQueryHandlerStrategies.PREFER_MSPID_SCOPE_SINGLE,
-        },
-        connectionOptions: undefined,
-      }
-    ) => {
-      logger.info('=== initialize() ===');
+    initialize: async (option) => {
+      const me = 'initialize()';
+      const debugL2 = Debug(`${NS}:initialize`);
 
-      const debugInit = Debug(`${NS}:initialize`);
+      logger.info(`=== ${me} ===`);
+
+      // Defaults
+      const defaultEventHandlerOptions = {
+        commitTimeout: 300,
+        endorseTimeout: 30,
+        strategy: DefaultEventHandlerStrategies.PREFER_MSPID_SCOPE_ALLFORTX,
+      };
+      const defaultQueryHandlerOptions = {
+        timeout: 10,
+        strategy: DefaultQueryHandlerStrategies.PREFER_MSPID_SCOPE_SINGLE,
+      };
+
+      // Trace
+      let span: Span;
+      const traceEnabled = option?.parent && tracer;
+      if (traceEnabled) {
+        const ctx = api.trace.setSpan(api.context.active(), option.parent);
+        span = tracer.startSpan(me, undefined, ctx);
+      }
 
       try {
         const fullPath = path.join(process.cwd(), walletPath);
 
-        debugInit('wallet fullPath: %s', fullPath);
+        debugL2('wallet fullPath: %s', fullPath);
 
         wallet = await Wallets.newFileSystemWallet(fullPath);
 
-        debugInit('Filesystem wallet found');
-        debugInit('adminId: %s', caAdminId);
+        debugL2('Filesystem wallet found');
+        debugL2('adminId: %s', caAdminId);
 
         identity = await wallet.get(caAdminId);
 
@@ -225,21 +256,22 @@ export const createFabricGateway: (
         } else logger.info('Wallet for ca-admin not found');
 
         // Step 1: enroll ca admin
-        !identity && (await enrollCaIdentity(caAdminId, caAdminSecret));
+        if (!identity) {
+          await enrollCaIdentity(caAdminId);
+          metricsOn && meters.enrollCount.add(1);
+        }
 
         // Step 2: enroll organization-admin
         await enrollAndSave(adminId, adminSecret);
-
-        metricsOn && meters.enrollCount.add(2);
 
         // Step 3:
         const options: GatewayOptions = {
           identity: adminId,
           wallet,
           discovery: { enabled: false },
-          eventHandlerOptions: option.eventHandlerOptions,
-          queryHandlerOptions: option.queryHandlerOptions,
-          'connection-options': option.connectionOptions,
+          eventHandlerOptions: option?.eventHandlerOptions || defaultEventHandlerOptions,
+          queryHandlerOptions: option?.queryHandlerOptions || defaultQueryHandlerOptions,
+          'connection-options': option?.connectionOptions,
         };
 
         await gateway.connect(profile, options);
@@ -251,9 +283,12 @@ export const createFabricGateway: (
         network = await gateway.getNetwork(defaultChannel);
 
         logger.info('🔥 network returned');
+
+        traceEnabled && span.end();
+
         return true;
       } catch (err) {
-        logger.error(`fail to initialize`, err);
+        logger.error(`fail to ${me} : `, err);
         return null;
       }
     },
@@ -341,7 +376,7 @@ export const createFabricGateway: (
         return null;
       }
     },
-    /* QUERY CHAIN HEIGHT*/
+    /* QUERY CHAIN HEIGHT */
     queryChainInfo: async (channelName) => {
       logger.info('=== queryChainInfo() ===');
 
@@ -356,6 +391,19 @@ export const createFabricGateway: (
       } catch (e) {
         logger.error(`fail to queryChainInfo`);
         return null;
+      }
+    },
+    /* INITIALIZE CHANNEL EVENT HUBS */
+    initializeChannelEventHubs: async () => {
+      logger.info('=== initializeChannelEventHubs() ===');
+
+      for await (const channelName of channels) {
+        try {
+          await createChannelEventHub(channelName);
+        } catch (e) {
+          logger.error(`Failed to initializeChannelEventHubs from ${channelName} : `, e);
+          return null;
+        }
       }
     },
   };

@@ -10,11 +10,14 @@
 # The CHAINCODE_SOURCE_DIR and CHAINCODE_METADATA_DIR should be treated as read only inputs.
 # If the buildpack should be applied to the chaincode source package, detect must return an exit code of 0;
 # any other exit code will indicate that the buildpack should not be applied.
+echo "=== DETECT ===" >> /var/artifacts/detect.log
 CHAINCODE_METADATA_DIR="$2"
 set -euo pipefail
 # use jq to extract the chaincode type from metadata.json and exit with
 # success if the chaincode type is golang
 if [ "$(cat "$CHAINCODE_METADATA_DIR/metadata.json" | sed -e 's/[{}]/''/g' | awk -F"[,:}]" '{for(i=1;i<=NF;i++){if($i~/'type'\042/){print $(i+1)}}}' | tr -d '"')" = "external" ]; then
+    echo "=== END DETECT 0 ===" >> /var/artifacts/detect.log
     exit 0
 fi
+echo "=== END DETECT 1 ===" >> /var/artifacts/detect.log
 exit 1

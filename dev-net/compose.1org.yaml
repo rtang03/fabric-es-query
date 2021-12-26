@@ -180,6 +180,7 @@ services:
       - ./scripts:/setup
       - ./config:/config
       - ./core.yaml:/etc/hyperledger/fabric/core.yaml
+      - ./volume/cli:/var/hyperledger/production
 
   # ORG1
   rca-org1:
@@ -214,18 +215,22 @@ services:
       - CORE_PEER_TLS_CERT_FILE=/var/artifacts/crypto-config/Org1MSP/peer0.org1.net/tls-msp/signcerts/cert.pem
       - CORE_PEER_TLS_KEY_FILE=/var/artifacts/crypto-config/Org1MSP/peer0.org1.net/tls-msp/keystore/key.pem
       - CORE_PEER_TLS_ROOTCERT_FILE=/var/artifacts/crypto-config/Org1MSP/peer0.org1.net/tls-msp/tlscacerts/tls-0-0-0-0-5052.pem
-      - CORE_PEER_GOSSIP_BOOTSTRAP=peer1-org1:7151
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0-org1:7051
       - CORE_PEER_GOSSIP_ENDPOINT=peer0-org1:7051
       - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0-org1:7051
       - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
       - CORE_OPERATIONS_LISTENADDRESS=peer0-org1:9443
       - CORE_METRICS_PROVIDER=prometheus
+      - CORE_PEER_CHAINCODEADDRESS=peer-org1:7052
+      - CORE_CHAINCODE_EXECUTETIMEOUT=300s
+      - TMPDIR=/var/artifacts
     working_dir: /opt/gopath/src/github.com/hyperledger/fabric/Org1MSP/peer0.org1.net
     volumes:
       - /var/run:/host/var/run
       - ./artifacts:/var/artifacts
       - ./config/bin:/builders/external/bin
       - ./core.yaml:/etc/hyperledger/fabric/core.yaml
+      - ./volume/peer0-org1:/var/hyperledger/production
     ports:
       - '7051:7051'
       - '7053:7053'

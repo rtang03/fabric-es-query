@@ -1,4 +1,4 @@
-require('dotenv').config({ path: 'src/fabric/__tests__/.env.fg.test' });
+require('dotenv').config({ path: 'src/fabric/__tests__/.env.fabricgateway' });
 import fs from 'fs';
 import path from 'path';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
@@ -76,7 +76,7 @@ afterAll(async () => {
 });
 
 describe('fabricGateway tests', () => {
-  it('getInfo', async () => {
+  it('should getInfo', async () => {
     const { adminId } = fg.getInfo();
     expect(adminId).toBeDefined();
   });
@@ -105,13 +105,17 @@ describe('fabricGateway tests', () => {
     }));
 
   it('queryBlock', async () =>
-    fg.queryBlock(fg.getDefaultChannelName(), 10).then(async (result) => {
-      // do some check
+    fg.queryBlock(fg.getDefaultChannelName(), 9).then(async (result) => {
+      expect(result?.header).toBeDefined();
+      expect(result?.data).toBeDefined();
+      expect(result?.metadata).toBeDefined();
     }));
 
   it('queryChainInfo', async () =>
     fg.queryChainInfo(fg.getDefaultChannelName()).then((result) => {
-      console.log(result);
+      expect(result?.height).toBeDefined();
+      expect(result?.currentBlockHash).toBeDefined();
+      expect(result?.previousBlockHash).toBeDefined();
     }));
 
   it('validate with metric server', async () => {
@@ -120,7 +124,15 @@ describe('fabricGateway tests', () => {
     const res = await fetch('http://localhost:9000/metrics');
     expect(res.status).toEqual(200);
 
-    const text = await res.text();
-    console.log(text);
+    const metricText = await res.text();
+    // should return:
+    // # HELP enrollment_total Count number of enrolled
+    // # TYPE enrollment_total counter
+    //   enrollment_total 2 1640367546744
+    // # HELP queryBlock_total Count number of queryBlock executed
+    // # TYPE queryBlock_total counter
+    //   queryBlock_total 1 1640367548673
+
+    expect(metricText).toBeDefined();
   });
 });

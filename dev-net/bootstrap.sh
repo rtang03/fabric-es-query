@@ -201,6 +201,13 @@ done
 
 for ORG in $ORGLIST
 do
+  set -x
+  rm $ARTIFACTS/eventstore.tgz
+  rm $ARTIFACTS/connection.json
+  rm $ARTIFACTS/code.tar.gz
+  rm $ARTIFACTS/metadata.json
+  set +x
+
   printf "\n###################"
   printf "\n# BUILD CHAINCODE #"
   printf "\n###################\n"
@@ -250,7 +257,7 @@ do
     -e CORE_PEER_MSPCONFIGPATH=/var/artifacts/crypto-config/${NAME}MSP/admin/msp
     cli peer"
 
-  echo "Determining package ID"
+  echo "Determining package ID - ${ORG}"
   REGEX='Package ID: (.*), Label: eventstore'
   if [[ `${PEER_ORG} lifecycle chaincode queryinstalled` =~ $REGEX ]]; then
     export CHAINCODE_CCID=${BASH_REMATCH[1]}
@@ -263,7 +270,12 @@ do
   printf "\n############################"
   printf "\n# DEPLOY CHAINCODE CONTAINER - $NAME #"
   printf "\n############################\n"
-  docker-compose $1 -f compose.cc.${ORG}.yaml up -d
+  if [ "$ORG" == "org1" ]
+  then
+    docker-compose $1 -f compose.cc.${ORG}.yaml up -d --no-recreate
+  else
+    docker-compose $1 -f compose.cc.org1.yaml -f compose.cc.${ORG}.yaml up -d --no-recreate
+  fi
 
   sleep 10
 
@@ -366,7 +378,6 @@ docker exec \
   -e CORE_PEER_MSPCONFIGPATH=/var/artifacts/crypto-config/${FIRST_NAME}MSP/admin/msp \
   cli sh -c "$CMD"
 printMessage "init chaincode" $?
-
 sleep 1
 
 for ORG in $ORGLIST

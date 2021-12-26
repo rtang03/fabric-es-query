@@ -1,3 +1,4 @@
+import type { Span } from '@opentelemetry/api';
 import type {
   Identity,
   DefaultEventHandlerOptions,
@@ -13,6 +14,7 @@ export type FabricGateway = {
     eventHandlerOptions?: DefaultEventHandlerOptions;
     queryHandlerOptions?: DefaultQueryHandlerOptions;
     connectionOptions?: any;
+    parent?: Span;
   }) => Promise<boolean>;
   registerNewUser: (id: string, secret: string) => Promise<boolean>;
   disconnect: () => void;
@@ -21,7 +23,7 @@ export type FabricGateway = {
   queryBlock: (channelName: string, blockNum: number) => Promise<any>;
   queryChainInfo: (chanelName: string) => Promise<any>;
   getDefaultChannelName: () => string;
-  initializeChannelEventHubs?: () => Promise<void>;
+  initializeChannelEventHubs: () => Promise<void>;
 };
 
 export type FabricGatewayInfo = {

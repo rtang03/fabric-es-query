@@ -17,6 +17,8 @@
     "test:fabricgwateway": "jest fabricGateway.test",
     "test:fabricgwateway-debug": "DEBUG=fabric:gateway jest fabricGateway.test",
     "test:fabricgwateway2": "jest --forceExit --detectOpenHandles fabricGateway.test",
+    "test:explorerdb": "jest explorerDb.test",
+    "test:explorerdb-debug": "DEBUG=explorerdb jest explorerDb.test",
     "server": "node --require './dist/tracing.js' ./dist/app.js",
     "client": "node --experimental-modules ./dist/client.js",
     "start": "node ./dist/sync.js"
@@ -45,9 +47,12 @@
     "isomorphic-unfetch": "^3.1.0",
     "js-yaml": "^4.1.0",
     "lodash": "^4.17.21",
+    "pg": "^8.7.1",
     "rimraf": "^3.0.2",
+    "typeorm": "0.2.41",
     "winston": "3.3.3",
-    "winston2": "npm:winston@2.4.5"
+    "winston2": "npm:winston@2.4.5",
+    "zen-observable": "0.8.15"
   },
   "devDependencies": {
     "@types/debug": "^4.1.7",
