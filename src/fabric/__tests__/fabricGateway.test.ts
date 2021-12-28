@@ -5,6 +5,7 @@ import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import fetch from 'isomorphic-unfetch';
 import yaml from 'js-yaml';
+import rimraf from 'rimraf';
 import type { ConnectionProfile, FabricGateway } from '../../types';
 import {
   createMetricServer,
@@ -29,6 +30,15 @@ let metrics: {
 };
 
 beforeAll(async () => {
+  try {
+    await new Promise((resolve, reject) =>
+      rimraf(path.join(__dirname, '__wallet__'), (err) => (err ? reject(err) : resolve(true)))
+    );
+  } catch {
+    console.error('fail to remove wallet');
+    process.exit(1);
+  }
+
   try {
     metrics = createMetricServer('my-meter', {
       filterMeters: [METERS.ENROLL_COUNT, METERS.QUERYBLOCK_COUNT],
@@ -104,19 +114,25 @@ describe('fabricGateway tests', () => {
       expect(mspId).toEqual('Org1MSP');
     }));
 
-  it('queryBlock', async () =>
-    fg.queryBlock(fg.getDefaultChannelName(), 9).then(async (result) => {
-      expect(result?.header).toBeDefined();
-      expect(result?.data).toBeDefined();
-      expect(result?.metadata).toBeDefined();
-    }));
+  // generated for other tests
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach((blockNum) => {
+    it(`queryBlock - ${blockNum}`, async () =>
+      fg.queryBlock(fg.getDefaultChannelName(), blockNum).then(async (result) => {
+        const fs = require('fs');
+        fs.writeFileSync(
+          path.join(__dirname, `__generated__/block-${blockNum}.json`),
+          JSON.stringify(result, null, 2)
+        );
+        expect(result?.header).toBeDefined();
+        expect(result?.data).toBeDefined();
+        expect(result?.metadata).toBeDefined();
+      }));
+  });
 
-  it('queryChainInfo', async () =>
-    fg.queryChainInfo(fg.getDefaultChannelName()).then((result) => {
-      expect(result?.height).toBeDefined();
-      expect(result?.currentBlockHash).toBeDefined();
-      expect(result?.previousBlockHash).toBeDefined();
-    }));
+  it('queryChannelHeight', async () =>
+    fg
+      .queryChannelHeight(fg.getDefaultChannelName())
+      .then((result) => expect(typeof result).toBe('number')));
 
   it('validate with metric server', async () => {
     await waitForSecond(2);

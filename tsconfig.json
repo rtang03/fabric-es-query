@@ -1,14 +1,14 @@
 {
   "compilerOptions": {
     "outDir": "dist",
-    "target": "es2017",
+    "target": "es2021",
     "moduleResolution": "node",
     "esModuleInterop": true,
     "module": "commonjs",
     "declaration": true,
     "sourceMap": false,
     "types": ["node", "jest"],
-    "lib": ["es2017", "dom", "esnext.asynciterable"],
+    "lib": ["es2021", "dom", "esnext.asynciterable"],
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true

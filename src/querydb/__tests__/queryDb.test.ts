@@ -1,17 +1,25 @@
-require('dotenv').config({ path: 'src/explorer-db/__tests__/.env.explorerdb' });
+require('dotenv').config({ path: 'src/querydb/__tests__/.env.querydb' });
 import fs from 'fs';
 import path from 'path';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import fetch from 'isomorphic-unfetch';
 import yaml from 'js-yaml';
-import { ConnectionOptions, createConnection } from 'typeorm';
-import type { ExplorerDb, PlatformConfig } from '../../types';
-import { createMetricServer, isPlatformConfig, logger, Meters, METERS } from '../../utils';
-import { createExplorerDb } from '../createExplorerDb';
+import { Connection, ConnectionOptions, createConnection } from 'typeorm';
+import type { QueryDb, PlatformConfig } from '../../types';
+import {
+  createMetricServer,
+  isPlatformConfig,
+  logger,
+  Meters,
+  METERS,
+  waitForSecond,
+} from '../../utils';
+import { createQueryDb } from '../createQueryDb';
 import { Blocks, Transactions } from '../entities';
 
-let explorerDb: ExplorerDb;
+let queryDb: QueryDb;
+let connection: Connection;
 let platformConfig: PlatformConfig;
 let metrics: {
   meters: Partial<Meters>;
@@ -29,7 +37,7 @@ const connectionOptions: ConnectionOptions = {
   database: process.env.DATABASE_DATABASE,
   logging: true,
   synchronize: false,
-  dropSchema: true,
+  dropSchema: false,
   entities: [Blocks],
   connectTimeoutMS: 10000,
 };
@@ -61,13 +69,26 @@ beforeAll(async () => {
   }
 
   try {
-    explorerDb = createExplorerDb({ logger, connection: createConnection(connectionOptions) });
+    queryDb = createQueryDb({ logger, connection: createConnection(connectionOptions) });
   } catch {
-    console.error('fail to createExplorerDb');
+    console.error('fail to createQueryDb');
     process.exit(1);
   }
 });
 
-describe('explorer-db tests', () => {
-  it('connect', async () => explorerDb.connect().then((ok) => expect(ok).toBeTruthy()));
+afterAll(async () => {
+  await queryDb.disconnect();
+  await waitForSecond(2);
+});
+
+describe('query-db tests', () => {
+  it('connect', async () =>
+    queryDb.connect().then((conn) => {
+      connection = conn;
+      expect(!!conn).toBeTruthy();
+    }));
+
+  it('test', () => {
+
+  })
 });

@@ -1,20 +1,20 @@
 import fs from 'fs';
 import path from 'path';
-import api, { Span, Tracer } from '@opentelemetry/api';
+import api, { type Span, type Tracer } from '@opentelemetry/api';
 import Debug from 'debug';
-import FabricCAServices, { IEnrollResponse } from 'fabric-ca-client';
+import FabricCAServices, { type IEnrollResponse } from 'fabric-ca-client';
 import { User } from 'fabric-common';
 import {
   Gateway,
-  GatewayOptions,
-  Identity,
-  Network,
+  type GatewayOptions,
+  type Identity,
+  type Network,
   Wallet,
   Wallets,
-  X509Identity,
+  type X509Identity,
   DefaultEventHandlerStrategies,
   DefaultQueryHandlerStrategies,
-  BlockListener,
+  type BlockListener,
 } from 'fabric-network';
 import fabprotos from 'fabric-protos';
 import winston from 'winston';
@@ -377,19 +377,22 @@ export const createFabricGateway: (
       }
     },
     /* QUERY CHAIN HEIGHT */
-    queryChainInfo: async (channelName) => {
-      logger.info('=== queryChainInfo() ===');
+    queryChannelHeight: async (channelName) => {
+      logger.info('=== queryChannelHeight() ===');
 
       try {
         const contract = network.getContract('qscc');
         const resultByte = await contract.evaluateTransaction('GetChainInfo', channelName);
-        const resultJson = fabprotos.common.BlockchainInfo.decode(resultByte);
+        const resultJson: any = fabprotos.common.BlockchainInfo.decode(resultByte);
 
         Debug(`${NS}:queryChainInfo`)('queryChainInfo, %O', resultJson);
 
-        return resultJson;
+        return resultJson?.height?.low
+          ? // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            parseInt(resultJson.height.low, 10) - 1
+          : null;
       } catch (e) {
-        logger.error(`fail to queryChainInfo`);
+        logger.error(`fail to queryChannelHeight`);
         return null;
       }
     },

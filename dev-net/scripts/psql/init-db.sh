@@ -4,8 +4,7 @@ set -e
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOSQL
   CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-  DROP TABLE IF EXISTS blocks;
-  CREATE TABLE blocks
+  CREATE TABLE IF NOT EXISTS blocks
   (
     id SERIAL PRIMARY KEY,
     blocknum integer DEFAULT NULL,
@@ -20,8 +19,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
     network_name varchar(255)
   );
 
-  DROP TABLE IF EXISTS transactions;
-  CREATE TABLE transactions
+  CREATE TABLE IF NOT EXISTS transactions
   (
     id SERIAL PRIMARY KEY,
     blockid integer DEFAULT NULL,
@@ -49,38 +47,29 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
     network_name varchar(255)
   );
 
-  ALTER table transactions owner to :user;
   Alter sequence transactions_id_seq restart with 6;
 
-  DROP INDEX IF EXISTS blocks_blocknum_idx;
   CREATE INDEX ON Blocks
   (blocknum);
 
-  DROP INDEX IF EXISTS blocks_channel_genesis_hash_idx;
   CREATE INDEX ON Blocks
   (channel_genesis_hash);
 
-  DROP INDEX IF EXISTS blocks_createdt_idx;
   CREATE INDEX ON Blocks
   (createdt);
 
-  DROP INDEX IF EXISTS transaction_txhash_idx;
   CREATE INDEX ON Transactions
   (txhash);
 
-  DROP INDEX IF EXISTS transaction_channel_genesis_hash_idx;
   CREATE INDEX ON Transactions
   (channel_genesis_hash);
 
-  DROP INDEX IF EXISTS transaction_createdt_idx;
   CREATE INDEX ON Transactions
   (createdt);
 
-  DROP INDEX IF EXISTS transaction_blockid_idx;
   CREATE INDEX ON Transactions
   (blockid);
 
-  DROP INDEX IF EXISTS transaction_chaincode_proposal_input_idx;
   CREATE INDEX ON Transactions
   ((md5
   (chaincode_proposal_input)));

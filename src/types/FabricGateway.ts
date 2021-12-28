@@ -21,9 +21,10 @@ export type FabricGateway = {
   getIdentityInfo: (label: string) => Promise<Identity & { credentials: { certificate } }>;
   queryChannels: () => Promise<ChannelQueryResponse>;
   queryBlock: (channelName: string, blockNum: number) => Promise<any>;
-  queryChainInfo: (chanelName: string) => Promise<any>;
+  queryChannelHeight: (channelName: string) => Promise<number>;
   getDefaultChannelName: () => string;
   initializeChannelEventHubs: () => Promise<void>;
+  queryTransaction?: () => Promise<any>;
 };
 
 export type FabricGatewayInfo = {
