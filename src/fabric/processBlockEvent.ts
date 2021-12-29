@@ -3,6 +3,7 @@ import sha from 'js-sha256';
 import winston from 'winston';
 import type { TBlock } from '../types';
 import { generateBlockHash } from './generateBlockHash';
+import { Blocks, Transactions } from '../querydb/entities';
 
 const convertFormatOfValue = (prop: string, encoding: string, obj: any) => {
   if (Array.isArray(obj)) {
@@ -93,15 +94,14 @@ export const processBlockEvent = (block: TBlock, logger?: winston.Logger) => {
   const createdt = new Date(header.channel_header.timestamp);
   const blockhash = generateBlockHash(block.header);
 
-  const block_row = {
-    blocknum: block.header.number.toString(),
+  const block_row: Omit<Blocks, 'id'> = {
+    blocknum: block.header.number,
     datahash: block.header.data_hash.toString('hex'),
     prehash: block.header.previous_hash.toString('hex'),
     txcount: block.data.data.length,
     createdt,
-    prev_blockhash: '',
     blockhash,
-    blksize: jsonObjSize(block),
+    blksize: parseInt(jsonObjSize(block), 10),
   };
 
   // Parse Transactions
@@ -126,7 +126,7 @@ export const processBlockEvent = (block: TBlock, logger?: winston.Logger) => {
     const creator_id_bytes = txObj.payload?.header?.signature_header?.creator?.id_bytes?.toString();
 
     let chaincode = '';
-    let status;
+    let status = 0;
     let readSet;
     let writeSet;
     let mspId = [];
@@ -186,10 +186,10 @@ export const processBlockEvent = (block: TBlock, logger?: winston.Logger) => {
     const read_set = JSON.stringify(readSet, null, 2);
     const write_set = JSON.stringify(writeSet, null, 2);
 
-    const transaction_row = {
-      blockid: block.header.number.toString(),
+    const transaction_row: Omit<Transactions, 'id'> = {
+      blockid: block.header.number,
       txhash: txid,
-      createdt: txObj.payload?.header?.channel_header?.timestamp,
+      createdt: new Date(txObj.payload?.header?.channel_header?.timestamp),
       chaincodename: chaincode,
       status,
       creator_msp_id: txObj.payload?.header?.signature_header?.creator?.mspid,

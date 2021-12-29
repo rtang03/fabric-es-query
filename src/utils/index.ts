@@ -4,3 +4,4 @@ export * from './constants';
 export * from './waitForSecond';
 export * from './errors';
 export * from './createMetricServer';
+export * from './createHttpServer';

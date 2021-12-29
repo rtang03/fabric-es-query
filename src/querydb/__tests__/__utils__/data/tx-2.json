@@ -1,0 +1,21 @@
+{
+  "blockid": 2,
+  "txhash": "e51aa1657b11b30f247069cdadf830bb992e494334d1752b6cbde0ec5d619b3e",
+  "createdt": "2021-12-26T15:29:34.000Z",
+  "chaincodename": "",
+  "status": undefined,
+  "creator_msp_id": "Org0MSP",
+  "endorser_msp_id": [],
+  "type": "CONFIG",
+  "read_set": "....",
+  "write_set": "...",
+  "validation_code": "",
+  "envelope_signature": "3045022100c3e6ce947be41613844ec3e1d7c38e04b2a8a788156bb15c9e3cb98a51d194f90220752d74d0893e298e431b918c1d6ace5cac440529017fcbba64cb6244ee00c8a2",
+  "payload_extension": "",
+  "creator_nonce": "18063387008892ccd0af5625171957075e7fad31f1c15ceb",
+  "chaincode_proposal_input": "",
+  "endorser_signature": "",
+  "creator_id_bytes": "-----BEGIN CERTIFICATE-----\nMIICrTCCAlSgAwIBAgIUT/nnl1i5dJk12fToSmxg0yeIRcYwCgYIKoZIzj0EAwIw\nYDELMAkGA1UEBhMCVVMxFzAVBgNVBAgTDk5vcnRoIENhcm9saW5hMRQwEgYDVQQK\nEwtIeXBlcmxlZGdlcjEPMA0GA1UECxMGRmFicmljMREwDwYDVQQDEwhyY2Etb3Jn\nMDAeFw0yMTEyMjYxNTI0MDBaFw0yMjEyMjYxNTI5MDBaMGoxCzAJBgNVBAYTAlVT\nMRcwFQYDVQQIEw5Ob3J0aCBDYXJvbGluYTEUMBIGA1UEChMLSHlwZXJsZWRnZXIx\nEDAOBgNVBAsTB29yZGVyZXIxGjAYBgNVBAMTEW9yZGVyZXIwLm9yZzAuY29tMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGAjitvD6rXHPCD4VkZMWGlvYPqAUS7yg\nXp2TNWiIjaaB6n8EE87lxjOHfW9DqcYzOpdxcYkP+6pNmvM/3iVeD6OB4TCB3jAOBgNVHQ8BAf8EBAMCB4AwDAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQU40Y98kWRMX/4\nkw5SJlnKUdmdBvcwHwYDVR0jBBgwFoAUqQF6+z+49YzeZ/q470DSymQNKFEwFwYD\nVR0RBBAwDoIMMDA0YjVmMTNiMzlhMGUGCCoDBAUGBwgBBFl7ImF0dHJzIjp7Imhm\nLkFmZmlsaWF0aW9uIjoiIiwiaGYuRW5yb2xsbWVudElEIjoib3JkZXJlcjAub3Jn\nMC5jb20iLCJoZi5UeXBlIjoib3JkZXJlciJ9fTAKBggqhkjOPQQDAgNHADBEAiAw\nqtE36j5UYeWmEzkd1vmVVQ+GPkCsL/DNbPfqv1BT1wIgdEPDs/DpBFjponWSbOwW\nbIR1+3d95HCzMgusJ1Opxdw=\n-----END CERTIFICATE-----\n",
+  "payload_proposal_hash": "",
+  "endorser_id_bytes": ""
+}

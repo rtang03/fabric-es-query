@@ -11,7 +11,7 @@ import {
   createMetricServer,
   isConnectionProfile,
   logger,
-  Meters,
+  type Meters,
   METERS,
   waitForSecond,
 } from '../../utils';
@@ -30,6 +30,7 @@ let metrics: {
 };
 
 beforeAll(async () => {
+  // removing pre-existing wallet
   try {
     await new Promise((resolve, reject) =>
       rimraf(path.join(__dirname, '__wallet__'), (err) => (err ? reject(err) : resolve(true)))

@@ -8,10 +8,10 @@ export class Blocks {
   @Column({ type: 'int', nullable: true })
   blocknum: number;
 
-  @Column({ type: 'varchar', length: 800, nullable: true })
+  @Column({ type: 'character varying', length: 256, nullable: true })
   datahash: string;
 
-  @Column({ type: 'varchar', length: 800, nullable: true })
+  @Column({ type: 'character varying', length: 256, nullable: true })
   prehash: string;
 
   @Column({ type: 'int', nullable: true })
@@ -20,18 +20,9 @@ export class Blocks {
   @Column({ type: 'timestamp', nullable: true })
   createdt: Date;
 
-  @Column({ type: 'varchar', length: 800, nullable: true })
-  prevBlockhash: string;
-
-  @Column({ type: 'varchar', length: 800, nullable: true })
+  @Column({ type: 'character varying', length: 256, nullable: true })
   blockhash: string;
-
-  @Column({ type: 'varchar', length: 800, nullable: true })
-  channelGenesisHash: string;
 
   @Column({ type: 'int', nullable: true })
   blksize: number;
-
-  @Column({ type: 'varchar' })
-  networkName: string;
 }

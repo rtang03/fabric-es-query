@@ -1,6 +1,6 @@
 export type Platform = {
-  initialize: () => Promise<void>;
-  diagnose?: () => Promise<void>;
+  initialize: () => Promise<boolean>;
+  check?: () => Promise<void>;
   repair?: () => Promise<void>;
   reset?: () => Promise<void>;
   syncStart?: () => Promise<void>;

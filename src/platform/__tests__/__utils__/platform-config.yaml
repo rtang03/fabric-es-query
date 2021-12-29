@@ -1,0 +1,6 @@
+sync:
+  # second
+  syncDuration: 5
+querydb:
+  host: "localhost"
+  port: "15432"

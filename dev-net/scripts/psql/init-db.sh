@@ -12,11 +12,8 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
     prehash character varying(256) DEFAULT NULL,
     txcount integer DEFAULT NULL,
     createdt Timestamp DEFAULT NULL,
-    prev_blockhash character varying(256) DEFAULT NULL,
     blockhash character varying(256) DEFAULT NULL,
-    channel_genesis_hash character varying(256) DEFAULT NULL,
-    blksize integer DEFAULT NULL,
-    network_name varchar(255)
+    blksize integer DEFAULT NULL
   );
 
   CREATE TABLE IF NOT EXISTS transactions
@@ -29,7 +26,6 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
     status integer DEFAULT NULL,
     creator_msp_id character varying(256) DEFAULT NULL,
     endorser_msp_id character varying(800) DEFAULT NULL,
-    chaincode_id character varying(256) DEFAULT NULL,
     type character varying(256) DEFAULT NULL,
     read_set json default NULL,
     write_set json default NULL,
@@ -40,11 +36,9 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
     creator_id_bytes character varying DEFAULT NULL,
     creator_nonce character varying DEFAULT NULL,
     chaincode_proposal_input character varying DEFAULT NULL,
-    tx_response character varying DEFAULT NULL,
     payload_proposal_hash character varying DEFAULT NULL,
     endorser_id_bytes character varying DEFAULT NULL,
-    endorser_signature character varying DEFAULT NULL,
-    network_name varchar(255)
+    endorser_signature character varying DEFAULT NULL
   );
 
   Alter sequence transactions_id_seq restart with 6;
@@ -53,16 +47,13 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
   (blocknum);
 
   CREATE INDEX ON Blocks
-  (channel_genesis_hash);
-
-  CREATE INDEX ON Blocks
   (createdt);
 
   CREATE INDEX ON Transactions
   (txhash);
 
   CREATE INDEX ON Transactions
-  (channel_genesis_hash);
+  (chaincodename);
 
   CREATE INDEX ON Transactions
   (createdt);

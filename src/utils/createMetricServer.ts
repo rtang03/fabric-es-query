@@ -1,4 +1,4 @@
-import api, { Counter, Meter } from '@opentelemetry/api-metrics';
+import api, { Counter, Meter, UpDownCounter, ObservableGauge } from '@opentelemetry/api-metrics';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import winston from 'winston';
@@ -16,6 +16,8 @@ export type MetricServerOptions = {
 export type Meters = {
   queryBlockCount: Counter;
   enrollCount: Counter;
+  queryDbConnected: UpDownCounter;
+  queryDbBlockHeight: ObservableGauge;
 };
 
 export const createMetricServer: (
@@ -64,6 +66,14 @@ export const createMetricServer: (
     queryBlockCount: meter.createCounter('queryBlock', {
       description: 'Count number of queryBlock executed',
       component: 'fabric-gateway',
+    }),
+    queryDbConnected: meter.createUpDownCounter('queryDbConnected', {
+      description: 'Count number of successful queryDb connected',
+      component: 'querydb',
+    }),
+    queryDbBlockHeight: meter.createObservableGauge('queryDbBlockHeight', {
+      description: 'Querying max-block-height',
+      component: 'querydb',
     }),
   };
 

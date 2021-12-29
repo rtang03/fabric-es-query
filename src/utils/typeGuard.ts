@@ -7,4 +7,6 @@ export const isConnectionProfile = (input: any): input is ConnectionProfile =>
   input?.orderers !== undefined;
 
 export const isPlatformConfig = (input: any): input is PlatformConfig =>
-  input?.sync?.syncDuration !== undefined;
+  input?.sync?.syncDuration !== undefined &&
+  input?.querydb?.port !== undefined &&
+  input?.querydb?.host !== undefined;

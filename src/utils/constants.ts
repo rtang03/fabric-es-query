@@ -2,7 +2,11 @@ export const INVALID = 'INVALID';
 export const METERS = {
   ENROLL_COUNT: 'enrollCount',
   QUERYBLOCK_COUNT: 'queryBlockCount',
+  QUERYDB_CONNECTED_COUNT: 'queryDbConnected',
+  QUERYDB_BLOCKHEIGHT: 'queryDbBlockHeight',
 };
+
+// used by connection profile
 export const connectionOptions = {
   'grpc.max_receive_message_length': -1,
   'grpc.max_send_message_length': -1,
