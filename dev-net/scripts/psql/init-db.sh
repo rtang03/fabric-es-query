@@ -19,6 +19,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
   CREATE TABLE IF NOT EXISTS transactions
   (
     id SERIAL PRIMARY KEY,
+    code integer DEFAULT NULL,
     blockid integer DEFAULT NULL,
     txhash character varying(256) DEFAULT NULL,
     createdt timestamp DEFAULT NULL,
@@ -57,6 +58,9 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
 
   CREATE INDEX ON Transactions
   (createdt);
+
+  CREATE INDEX ON Transactions
+  (code);
 
   CREATE INDEX ON Transactions
   (blockid);

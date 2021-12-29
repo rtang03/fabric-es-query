@@ -186,7 +186,7 @@ export const processBlockEvent = (block: TBlock, logger?: winston.Logger) => {
     const read_set = JSON.stringify(readSet, null, 2);
     const write_set = JSON.stringify(writeSet, null, 2);
 
-    const transaction_row: Omit<Transactions, 'id'> = {
+    const transaction_row: Omit<Transactions, 'id' | 'code'> = {
       blockid: block.header.number,
       txhash: txid,
       createdt: new Date(txObj.payload?.header?.channel_header?.timestamp),

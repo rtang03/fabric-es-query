@@ -18,3 +18,10 @@ export const connectionOptions = {
   'grpc-wait-for-ready-timeout': 3000,
   'request-timeout': 45000,
 };
+
+// used to identify whether Transaction is QueryDb contains public-data commit, or private-data commit
+export const CODE = {
+  PUBLIC_COMMIT: 1,
+  PRIVATE_COMMIT: 2,
+  UNKNOWN: 99,
+};

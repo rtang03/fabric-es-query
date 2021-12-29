@@ -19,7 +19,7 @@
     "test:fabricgwateway-debug": "DEBUG=fabric:gateway jest fabricGateway.test",
     "test:fabricgwateway2": "jest --forceExit --detectOpenHandles fabricGateway.test",
     "test:querydb": "jest queryDb.test",
-    "test:querydb-debug": "DEBUG=querydb* jest queryDb.test",
+    "test:querydb-debug": "DEBUG=querydb jest queryDb.test",
     "server": "node --require './dist/tracing.js' ./dist/app.js",
     "client": "node --experimental-modules ./dist/client.js",
     "start": "node ./dist/sync.js"

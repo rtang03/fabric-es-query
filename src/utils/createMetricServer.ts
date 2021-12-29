@@ -72,7 +72,7 @@ export const createMetricServer: (
       component: 'querydb',
     }),
     queryDbBlockHeight: meter.createObservableGauge('queryDbBlockHeight', {
-      description: 'Querying max-block-height',
+      description: 'Query max-block-height',
       component: 'querydb',
     }),
   };

@@ -6,6 +6,9 @@ export class Transactions {
   id: number;
 
   @Column({ type: 'int', nullable: true })
+  code: number;
+
+  @Column({ type: 'int', nullable: true })
   blockid: number;
 
   @Column({ type: 'character varying', length: 256, nullable: true })

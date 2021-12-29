@@ -3,7 +3,7 @@
   "txhash": "e51aa1657b11b30f247069cdadf830bb992e494334d1752b6cbde0ec5d619b3e",
   "createdt": "2021-12-26T15:29:34.000Z",
   "chaincodename": "",
-  "status": undefined,
+  "status": 0,
   "creator_msp_id": "Org0MSP",
   "endorser_msp_id": [],
   "type": "CONFIG",
