@@ -1,6 +1,7 @@
 require('dotenv').config({ path: 'src/querydb/__tests__/.env.querydb' });
 import fs from 'fs';
 import path from 'path';
+import util from 'util';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import fetch from 'isomorphic-unfetch';
@@ -44,7 +45,6 @@ import t6 from './__utils__/data/tx-6.json';
 import t7 from './__utils__/data/tx-7.json';
 import t8 from './__utils__/data/tx-8.json';
 import t9 from './__utils__/data/tx-9.json';
-import util from 'util';
 
 let messageCenter: MessageCenter;
 let queryDb: QueryDb;
@@ -219,39 +219,39 @@ describe('query-db tests', () => {
     })
   );
 
-  // it('getTxCount', async () => queryDb.getTxCount().then((result) => expect(result).toEqual(11)));
-  //
-  // it('findMissingBlock, at = 5', async () =>
-  //   queryDb.findMissingBlock(5).then((result) => expect(result).toEqual([])));
-  //
-  // it('findMissingBlock, at = 13', async () =>
-  //   queryDb.findMissingBlock(13).then((result) => expect(result).toEqual([11, 12])));
+  it('getTxCount', async () => queryDb.getTxCount().then((result) => expect(result).toEqual(11)));
 
-  // it('getPublicCommitTx', async () =>
-  //   queryDb
-  //     .getPublicCommitTx()
-  //     .then((result) => result.map(({ blockid }) => blockid))
-  //     .then((blockids) => expect(blockids).toEqual([7, 9])));
-  //
-  // it('getPrivateCommitTx', async () =>
-  //   queryDb
-  //     .getPrivateCommitTx()
-  //     .then((result) => result.map(({ blockid }) => blockid))
-  //     .then((blockids) => expect(blockids).toEqual([8, 10])));
+  it('findMissingBlock, at = 5', async () =>
+    queryDb.findMissingBlock(5).then((result) => expect(result).toEqual([])));
+
+  it('findMissingBlock, at = 13', async () =>
+    queryDb.findMissingBlock(13).then((result) => expect(result).toEqual([11, 12])));
+
+  it('getPublicCommitTx', async () =>
+    queryDb
+      .getPublicCommitTx()
+      .then((result) => result.map(({ blockid }) => blockid))
+      .then((blockids) => expect(blockids).toEqual([7, 9])));
+
+  it('getPrivateCommitTx', async () =>
+    queryDb
+      .getPrivateCommitTx()
+      .then((result) => result.map(({ blockid }) => blockid))
+      .then((blockids) => expect(blockids).toEqual([8, 10])));
 
   it('getPubCommit', async () =>
     queryDb
-      .getPubCommit()
+      .parseBlocksToCommits()
       .then((result) => result.map((commit) => expect(isCommit(commit)).toBeTruthy())));
 
-  // it('validate with metric server', async () => {
-  //   await waitForSecond(2);
-  //   const res = await fetch('http://localhost:9000/metrics');
-  //   expect(res.status).toEqual(200);
-  //
-  //   const metricText = await res.text();
-  //   console.log(metricText);
-  //
-  //   expect(metricText).toBeDefined();
-  // });
+  it('validate with metric server', async () => {
+    await waitForSecond(2);
+    const res = await fetch('http://localhost:9000/metrics');
+    expect(res.status).toEqual(200);
+
+    const metricText = await res.text();
+    console.log(metricText);
+
+    expect(metricText).toBeDefined();
+  });
 });

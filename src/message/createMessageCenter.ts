@@ -18,7 +18,7 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
   return {
     getInfo: () => ({ windowTime, bufferSize }),
     subscribe: (observer: Partial<Observer<Message>>) => $messages.subscribe(observer),
-    notify: (m) => $messages.next(m),
+    notify: (m) => $messages.next({ ...m, timestamp: new Date() }),
     getMessagesObs: () => $messages,
   };
 };

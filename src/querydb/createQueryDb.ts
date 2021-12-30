@@ -3,6 +3,7 @@ import Debug from 'debug';
 import { omit, flatten, range } from 'lodash';
 import { Connection, Not, getManager } from 'typeorm';
 import winston from 'winston';
+import { MSG } from '../message';
 import type { MessageCenter, QueryDb } from '../types';
 import { CODE, isBlocks, isCommit, isTransactions, isWriteSet, type Meters } from '../utils';
 import { Blocks, Commit, Transactions } from './entities';
@@ -73,7 +74,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         conn = await connection;
         logger.info(`database connected`);
 
-        mCenter?.notify({ title: `database connected` });
+        mCenter?.notify({ title: MSG.DB_CONNECTED });
 
         meters?.queryDbConnected.add(1);
 
@@ -126,6 +127,10 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
     },
     insertBlock: async (b: Blocks) => {
       const me = 'insertBlock()';
+      const desc = `blocknum: ${b.blocknum}`;
+      const broadcast = true;
+      const save = true;
+
       try {
         if (!isBlocks(b)) {
           logger.error('unexpected error: invalid block format');
@@ -134,19 +139,32 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
         const result = await conn.getRepository(Blocks).save(b);
 
+        mCenter?.notify({ title: MSG.INSERT_BLOCK_OK, desc, broadcast, save });
+
         Debug(`${NS}:${me}`)('result: %O', result);
 
         return result;
       } catch (error) {
         logger.error(`fail to ${me} : `, error);
 
-        mCenter?.notify({ kind: 'error', title: `fail to ${me}`, error, broadcast: true });
+        mCenter?.notify({
+          kind: 'error',
+          title: MSG.INSERT_BLOCK_FAIL,
+          desc,
+          error,
+          broadcast,
+          save,
+        });
 
         return null;
       }
     },
     insertTransaction: async (tx) => {
       const me = 'insertTransaction()';
+      const desc = `txhash: ${tx.txhash}; blocknum: ${tx.blockid}`;
+      const broadcast = true;
+      const save = true;
+
       try {
         if (!isTransactions(tx)) {
           logger.error('unexpected error: invalid transaction format');
@@ -155,13 +173,15 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
         const result = await conn.getRepository(Transactions).save(tx);
 
+        mCenter?.notify({ title: MSG.INSERT_TX_OK, desc, broadcast, save });
+
         Debug(`${NS}:${me}`)('result: %O', result);
 
         return result;
       } catch (error) {
         logger.error(`fail to ${me} : `, error);
 
-        mCenter?.notify({ kind: 'error', title: `fail to ${me}`, error, broadcast: true });
+        mCenter?.notify({ kind: 'error', title: MSG.INSERT_TX_FAIL, desc, error, broadcast, save });
 
         return null;
       }
@@ -251,65 +271,38 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         return null;
       }
     },
-    getPubCommit: async () => {
-      const me = 'getPubCommit()';
+    parseBlocksToCommits: async (isPrivate) => {
+      const me = 'parseBlockToCommits()';
+      const code = isPrivate ? CODE.PRIVATE_COMMIT : CODE.PUBLIC_COMMIT;
+
       try {
         const transactions = await conn
           .getRepository(Transactions)
-          .find({ where: [{ code: CODE.PUBLIC_COMMIT }], order: { blockid: 'ASC' } });
+          .find({ where: [{ code }], order: { blockid: 'ASC' } });
 
         Debug(`${NS}:${me}`)('transactions: %O', transactions);
 
-        const result = flatten(transactions.map((tx) => parseWriteSet(tx)));
+        const result = flatten(
+          transactions.map((tx) => {
+            const parsedResult = parseWriteSet(tx);
+
+            !parsedResult &&
+              mCenter?.notify({
+                kind: 'error',
+                title: MSG.PARSE_WRITESET_FAIL,
+                desc: `txhash: ${tx.txhash}; blocknum: ${tx.blockid}`,
+                error: tx.write_set,
+                broadcast: false,
+                save: true,
+              });
+
+            return parsedResult;
+          })
+        );
 
         Debug(`${NS}:${me}`)('result: %O', result);
 
         return result;
-      } catch (e) {
-        logger.error(`fail to ${me} : `, e);
-        return null;
-      }
-    },
-    getPubCommitByEntName: async () => {
-      const me = 'getPubCommitByEntName()';
-      try {
-        const result = await conn
-          .getRepository(Transactions)
-          .find({ where: [{ code: CODE.PRIVATE_COMMIT }], order: { blockid: 'ASC' } });
-
-        Debug(`${NS}:${me}`)('result: %O', result);
-
-        return null;
-      } catch (e) {
-        logger.error(`fail to ${me} : `, e);
-        return null;
-      }
-    },
-    getPubCommitByEntNameByEntId: async () => {
-      const me = 'getPubCommitByEntNameByEntId()';
-      try {
-        const result = await conn
-          .getRepository(Transactions)
-          .find({ where: [{ code: CODE.PRIVATE_COMMIT }], order: { blockid: 'ASC' } });
-
-        Debug(`${NS}:${me}`)('result: %O', result);
-
-        return null;
-      } catch (e) {
-        logger.error(`fail to ${me} : `, e);
-        return null;
-      }
-    },
-    getPubCommitByEntNameByEntIdByComId: async () => {
-      const me = 'getPubCommitByEntNameByEntIdByComId()';
-      try {
-        const result = await conn
-          .getRepository(Transactions)
-          .find({ where: [{ code: CODE.PRIVATE_COMMIT }], order: { blockid: 'ASC' } });
-
-        Debug(`${NS}:${me}`)('result: %O', result);
-
-        return null;
       } catch (e) {
         logger.error(`fail to ${me} : `, e);
         return null;

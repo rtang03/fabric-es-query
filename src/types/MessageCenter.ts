@@ -10,6 +10,8 @@ export type Message<T = any> = {
   broadcast?: boolean;
   traceId?: string;
   callback?: any;
+  save?: boolean;
+  timestamp?: Date;
 };
 
 export type MessageCenter = {
