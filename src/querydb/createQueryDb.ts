@@ -1,39 +1,70 @@
 import { type Tracer } from '@opentelemetry/api';
 import Debug from 'debug';
-import { flatten, range } from 'lodash';
+import { omit, flatten, range } from 'lodash';
 import { Connection, Not, getManager } from 'typeorm';
 import winston from 'winston';
-import type { QueryDb } from '../types';
-import { CODE, isBlocks, isTransactions, type Meters } from '../utils';
+import type { MessageCenter, QueryDb } from '../types';
+import { CODE, isBlocks, isCommit, isTransactions, isWriteSet, type Meters } from '../utils';
 import { Blocks, Commit, Transactions } from './entities';
 
 export type CreateQueryDbOption = {
   connection: Promise<Connection>;
   nonDefaultSchema?: string;
   logger: winston.Logger;
-  metricsOn?: boolean;
   meters?: Partial<Meters>;
   tracer?: Tracer;
+  messageCenter?: MessageCenter;
 };
 
 export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
   connection,
   nonDefaultSchema,
-  metricsOn,
   meters,
   tracer,
   logger,
+  messageCenter: mCenter,
 }) => {
   let conn: Connection;
 
   logger.info('Preparing query db');
 
   const NS = 'querydb';
-  const debug = Debug(NS);
   const schema = nonDefaultSchema || 'default';
 
-  const parseWriteSet = (write_set: any): Commit[] => {
-    return null;
+  const parseWriteSet = (tx: Transactions): Commit => {
+    let ws: unknown;
+    const { chaincodename, write_set, txhash, blockid } = tx;
+
+    try {
+      ws = JSON.parse(write_set);
+
+      Debug(`${NS}:parseWriteSet`)('txhash, %s', txhash);
+      Debug(`${NS}:parseWriteSet`)('%O', ws);
+    } catch {
+      logger.error(`fail to parseWriteSet(), txid: ${txhash}`);
+      return null;
+    }
+
+    try {
+      if (isWriteSet(ws)) {
+        const { key, value, is_delete } = ws.filter(
+          ({ chaincode }) => chaincode === chaincodename
+        )[0].set[0];
+
+        logger.info(`parsing ${key}, txid: ${txhash}, blockid: ${blockid}`);
+
+        const valueJson: unknown = JSON.parse(value);
+
+        if (isCommit(valueJson) && !is_delete) return omit(valueJson, 'key');
+      }
+      logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid}`);
+      logger.error(`write_set: ${write_set}`);
+      return null;
+    } catch (e) {
+      logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid} : `, e);
+      logger.error(`write_set: ${write_set}`);
+      return null;
+    }
   };
 
   return {
@@ -42,7 +73,9 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         conn = await connection;
         logger.info(`database connected`);
 
-        metricsOn && meters.queryDbConnected.add(1);
+        mCenter?.notify({ title: `database connected` });
+
+        meters?.queryDbConnected.add(1);
 
         return conn;
       } catch (e) {
@@ -59,8 +92,9 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
     },
     disconnect: async () => {
       await conn.close();
-      metricsOn && meters.queryDbConnected.add(-1);
       logger.info(`querydb disconnected`);
+
+      meters?.queryDbConnected.add(-1);
     },
     getBlockHeight: async () => {
       const me = 'getBlockHeight()';
@@ -103,8 +137,11 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         Debug(`${NS}:${me}`)('result: %O', result);
 
         return result;
-      } catch (e) {
-        logger.error(`fail to ${me} : `, e);
+      } catch (error) {
+        logger.error(`fail to ${me} : `, error);
+
+        mCenter?.notify({ kind: 'error', title: `fail to ${me}`, error, broadcast: true });
+
         return null;
       }
     },
@@ -121,8 +158,11 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         Debug(`${NS}:${me}`)('result: %O', result);
 
         return result;
-      } catch (e) {
-        logger.error(`fail to ${me} : `, e);
+      } catch (error) {
+        logger.error(`fail to ${me} : `, error);
+
+        mCenter?.notify({ kind: 'error', title: `fail to ${me}`, error, broadcast: true });
+
         return null;
       }
     },
@@ -186,6 +226,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
           where: [{ code: CODE.PUBLIC_COMMIT, validation_code: Not('VALID') }],
           order: { blockid: 'ASC' },
         });
+
         Debug(`${NS}:${me}`)('result: %O', result);
 
         return result;
@@ -210,12 +251,14 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         return null;
       }
     },
-    getPublicCommit: async () => {
-      const me = 'getPublicCommit()';
+    getPubCommit: async () => {
+      const me = 'getPubCommit()';
       try {
         const transactions = await conn
           .getRepository(Transactions)
           .find({ where: [{ code: CODE.PUBLIC_COMMIT }], order: { blockid: 'ASC' } });
+
+        Debug(`${NS}:${me}`)('transactions: %O', transactions);
 
         const result = flatten(transactions.map((tx) => parseWriteSet(tx)));
 
@@ -227,8 +270,38 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         return null;
       }
     },
-    getPrivateCommit: async () => {
-      const me = 'getPrivateCommit()';
+    getPubCommitByEntName: async () => {
+      const me = 'getPubCommitByEntName()';
+      try {
+        const result = await conn
+          .getRepository(Transactions)
+          .find({ where: [{ code: CODE.PRIVATE_COMMIT }], order: { blockid: 'ASC' } });
+
+        Debug(`${NS}:${me}`)('result: %O', result);
+
+        return null;
+      } catch (e) {
+        logger.error(`fail to ${me} : `, e);
+        return null;
+      }
+    },
+    getPubCommitByEntNameByEntId: async () => {
+      const me = 'getPubCommitByEntNameByEntId()';
+      try {
+        const result = await conn
+          .getRepository(Transactions)
+          .find({ where: [{ code: CODE.PRIVATE_COMMIT }], order: { blockid: 'ASC' } });
+
+        Debug(`${NS}:${me}`)('result: %O', result);
+
+        return null;
+      } catch (e) {
+        logger.error(`fail to ${me} : `, e);
+        return null;
+      }
+    },
+    getPubCommitByEntNameByEntIdByComId: async () => {
+      const me = 'getPubCommitByEntNameByEntIdByComId()';
       try {
         const result = await conn
           .getRepository(Transactions)

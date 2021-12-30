@@ -32,11 +32,11 @@ export class Transactions {
   @Column({ type: 'character varying', length: 256, nullable: true })
   type: string;
 
-  @Column({ type: 'simple-json', nullable: true })
-  read_set: any;
+  @Column({ type: 'varchar', nullable: true })
+  read_set: string;
 
-  @Column({ type: 'simple-json', nullable: true })
-  write_set: any;
+  @Column({ type: 'varchar', nullable: true })
+  write_set: string;
 
   @Column({ type: 'character varying', length: 255, nullable: true })
   validation_code: string;

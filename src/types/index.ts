@@ -5,3 +5,4 @@ export * from './Platform';
 export * from './QueryDb';
 export * from './platformConfig';
 export * from './TBlock';
+export * from './MessageCenter';

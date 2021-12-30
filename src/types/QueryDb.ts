@@ -15,6 +15,8 @@ export type QueryDb = {
   getPrivateCommitTx: () => Promise<Transactions[]>;
   findPublicCommitTxWithFailure: () => Promise<Transactions[]>;
   findPrivateCommitTxWithFailure: () => Promise<Transactions[]>;
-  getPublicCommit: (blockid?: number) => Promise<Commit[]>;
-  getPrivateCommit: (blockid?: number) => Promise<Commit[]>;
+  getPubCommit: (blockid?: number) => Promise<Commit[]>;
+  getPubCommitByEntName: (blockid?: number) => Promise<Commit[]>;
+  getPubCommitByEntNameByEntId: (blockid?: number) => Promise<Commit[]>;
+  getPubCommitByEntNameByEntIdByComId: (blockid?: number) => Promise<Commit[]>;
 };

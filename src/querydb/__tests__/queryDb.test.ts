@@ -6,11 +6,13 @@ import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import fetch from 'isomorphic-unfetch';
 import yaml from 'js-yaml';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
-import type { QueryDb, PlatformConfig } from '../../types';
+import { createMessageCenter } from '../../message';
+import type { QueryDb, PlatformConfig, MessageCenter } from '../../types';
 import {
   CODE,
   createMetricServer,
   isBlocks,
+  isCommit,
   isPlatformConfig,
   isTransactions,
   logger,
@@ -19,7 +21,7 @@ import {
   waitForSecond,
 } from '../../utils';
 import { createQueryDb } from '../createQueryDb';
-import { Blocks, Transactions } from '../entities';
+import { Blocks, Commit, Transactions } from '../entities';
 import b0 from './__utils__/data/block-0.json';
 import b1 from './__utils__/data/block-1.json';
 import b10 from './__utils__/data/block-10.json';
@@ -42,7 +44,9 @@ import t6 from './__utils__/data/tx-6.json';
 import t7 from './__utils__/data/tx-7.json';
 import t8 from './__utils__/data/tx-8.json';
 import t9 from './__utils__/data/tx-9.json';
+import util from 'util';
 
+let messageCenter: MessageCenter;
 let queryDb: QueryDb;
 let defaultConnection: Connection;
 let testConnection: Promise<Connection>;
@@ -54,7 +58,6 @@ let metrics: {
   meterProvider: MeterProvider;
 };
 
-const metricsOn = true;
 const schema = 'querydbtest';
 const connectionOptions: ConnectionOptions = {
   name: 'default',
@@ -67,7 +70,7 @@ const connectionOptions: ConnectionOptions = {
   logging: true,
   synchronize: false,
   dropSchema: false,
-  entities: [Blocks, Transactions],
+  entities: [Blocks, Transactions, Commit],
   connectTimeoutMS: 10000,
 };
 
@@ -83,7 +86,6 @@ const constructBlockObj = (block: Blocks, data: any) => {
   return block;
 };
 const constructTxObj = (tx: Transactions, data: any) => {
-  // (data.chaincode_proposal_input as string).startsWith('createCommit')
   tx.code =
     data.validation_code === 'VALID' && data.status === 200
       ? (data.chaincode_proposal_input as string).startsWith('createCommit')
@@ -116,6 +118,13 @@ const constructTxObj = (tx: Transactions, data: any) => {
 };
 
 beforeAll(async () => {
+  messageCenter = createMessageCenter({ logger });
+  messageCenter.subscribe({
+    next: (m) => console.log(util.format('📨 message received: %j', m)),
+    error: (e) => console.error(util.format('❌ message error: %j', e)),
+    complete: () => console.log('subscription completed'),
+  });
+
   try {
     metrics = createMetricServer('my-meter', {
       interval: 1000,
@@ -153,12 +162,13 @@ beforeAll(async () => {
       ...{ name: 'querydbtest', schema, synchronize: true, dropSchema: true },
     };
     testConnection = createConnection(testConnectionOptions);
+
     queryDb = createQueryDb({
       logger,
       connection: testConnection,
       nonDefaultSchema: schema,
-      metricsOn,
       meters: metrics.meters,
+      messageCenter,
     });
   } catch {
     logger.error('fail to createQueryDb');
@@ -167,6 +177,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  messageCenter.getMessagesObs().unsubscribe();
   await defaultConnection.close();
   await queryDb.disconnect();
   await metrics.meterProvider.shutdown();
@@ -208,25 +219,30 @@ describe('query-db tests', () => {
     })
   );
 
-  it('getTxCount', async () => queryDb.getTxCount().then((result) => expect(result).toEqual(11)));
+  // it('getTxCount', async () => queryDb.getTxCount().then((result) => expect(result).toEqual(11)));
+  //
+  // it('findMissingBlock, at = 5', async () =>
+  //   queryDb.findMissingBlock(5).then((result) => expect(result).toEqual([])));
+  //
+  // it('findMissingBlock, at = 13', async () =>
+  //   queryDb.findMissingBlock(13).then((result) => expect(result).toEqual([11, 12])));
 
-  it('findMissingBlock, at = 5', async () =>
-    queryDb.findMissingBlock(5).then((result) => expect(result).toEqual([])));
+  // it('getPublicCommitTx', async () =>
+  //   queryDb
+  //     .getPublicCommitTx()
+  //     .then((result) => result.map(({ blockid }) => blockid))
+  //     .then((blockids) => expect(blockids).toEqual([7, 9])));
+  //
+  // it('getPrivateCommitTx', async () =>
+  //   queryDb
+  //     .getPrivateCommitTx()
+  //     .then((result) => result.map(({ blockid }) => blockid))
+  //     .then((blockids) => expect(blockids).toEqual([8, 10])));
 
-  it('findMissingBlock, at = 13', async () =>
-    queryDb.findMissingBlock(13).then((result) => expect(result).toEqual([11, 12])));
-
-  it('getPublicCommitTx', async () =>
+  it('getPubCommit', async () =>
     queryDb
-      .getPublicCommitTx()
-      .then((result) => result.map(({ blockid }) => blockid))
-      .then((blockids) => expect(blockids).toEqual([7, 9])));
-
-  it('getPrivateCommitTx', async () =>
-    queryDb
-      .getPrivateCommitTx()
-      .then((result) => result.map(({ blockid }) => blockid))
-      .then((blockids) => expect(blockids).toEqual([8, 10])));
+      .getPubCommit()
+      .then((result) => result.map((commit) => expect(isCommit(commit)).toBeTruthy())));
 
   // it('validate with metric server', async () => {
   //   await waitForSecond(2);

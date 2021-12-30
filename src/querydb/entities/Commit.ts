@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { PrimaryColumn, Column, Entity } from 'typeorm';
 
 /**
  * **Lifecycle**
@@ -27,56 +27,34 @@ export type BaseEvent = {
 
 @Entity('commit')
 export class Commit {
-  @Column({ type: 'varchar', nullable: false })
+  @PrimaryColumn({ type: 'varchar', nullable: false })
   id: string;
 
+  @Column({ type: 'varchar', length: 256, nullable: false })
   entityName: string;
 
+  @Column({ type: 'int', nullable: true })
   version?: number;
 
-  commitId?: string;
+  @Column({ type: 'varchar', length: 256, nullable: false })
+  commitId: string;
 
-  entityId?: string;
+  @Column({ type: 'varchar', length: 256, nullable: false })
+  entityId: string;
 
-  mspId?: string;
+  @Column({ type: 'varchar', length: 256, nullable: false })
+  mspId: string;
 
-  events?: BaseEvent[];
+  @Column({ type: 'simple-json', nullable: true })
+  events: BaseEvent[];
 
+  @Column({ type: 'varchar', nullable: true })
   hash?: string;
 
+  @Column({ type: 'varchar', nullable: true })
   raw?: string;
 
+  @Column({ type: 'varchar', nullable: true })
   signedRequest?: string;
 }
 
-// export type Commit = {
-//   /** (same as entityId) **/
-//   id: string;
-//
-//   /** entity name **/
-//   entityName: string;
-//
-//   /** version number **/
-//   version?: number;
-//
-//   /** commit Id **/
-//   commitId?: string;
-//
-//   /** entity Id **/
-//   entityId?: string;
-//
-//   /** organization Id **/
-//   mspId?: string;
-//
-//   /** RESERVED FIELD: events array **/
-//   events?: BaseEvent[];
-//
-//   /** RESERVED FIELD: hash of privatedata's events string **/
-//   hash?: string;
-//
-//   /** RESERVED FIELD: stringified events **/
-//   eventsString?: string;
-//
-//   /** RESERVED FIELD: signed request **/
-//   signedRequest?: string;
-// };
