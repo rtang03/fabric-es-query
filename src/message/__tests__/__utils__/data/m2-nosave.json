@@ -1,0 +1,7 @@
+{
+  "kind": "test",
+  "title": "title-2-nosave",
+  "desc": "desc-2 no save",
+  "status": "VALID",
+  "save": false
+}

@@ -15,11 +15,13 @@ import {
   DefaultEventHandlerStrategies,
   DefaultQueryHandlerStrategies,
   type BlockListener,
+  BlockEvent,
 } from 'fabric-network';
 import fabprotos from 'fabric-protos';
 import winston from 'winston';
-import type { ConnectionProfile, FabricGateway } from '../types';
-import type { Meters } from '../utils';
+import type { ConnectionProfile, FabricGateway, MessageCenter } from '../types';
+import { type Meters } from '../utils';
+import { MSG } from '../message';
 
 const { BlockDecoder } = require('fabric-common');
 
@@ -28,9 +30,9 @@ export type CreateFabricGatewayOption = {
   adminId: string;
   walletPath: string;
   logger: winston.Logger;
-  metricsOn?: boolean;
   meters?: Partial<Meters>;
   tracer?: Tracer;
+  messageCenter?: MessageCenter;
 };
 
 export const createFabricGateway: (
@@ -38,7 +40,7 @@ export const createFabricGateway: (
   option: CreateFabricGatewayOption
 ) => FabricGateway = (
   profile,
-  { adminId, adminSecret, walletPath, logger, meters, metricsOn, tracer }
+  { adminId, adminSecret, walletPath, logger, meters, tracer, messageCenter: mCenter }
 ) => {
   let wallet: Wallet;
   let identity: Identity;
@@ -105,7 +107,7 @@ export const createFabricGateway: (
       enrollmentSecret,
     });
 
-    metricsOn && meters.enrollCount.add(1);
+    meters?.enrollCount.add(1);
 
     const { certificate, key } = enrollment;
 
@@ -158,33 +160,14 @@ export const createFabricGateway: (
   };
   /* END */
 
-  /* === CREATE CHANNEL EVENT HUB === */
-  const createChannelEventHub = async (channelName: string) => {
-    const currentNetwork =
-      channelName === defaultChannel ? network : await gateway.getNetwork(channelName);
-    const listener = await currentNetwork.addBlockListener(
-      async (event) => {
-        // TODO: DO WHAT??
-        // Skip first block, it is process by peer event hub
-        // if (!(event.blockNumber.low === 0 && event.blockNumber.high === 0)) {
-        //   const noDiscovery = false;
-        //   await this.fabricServices.processBlockEvent(this.client, event.blockData, noDiscovery);
-        // }
-      },
-      { type: 'full' }
-    );
-
-    logger.info(`block listener added ${channelName}`);
-
-    channelEventHubs[channelName] = listener;
-  };
-  /* END */
-
   return {
     getDefaultChannelName: () => defaultChannel,
     /* INFO */
     getInfo: () => {
-      logger.info('=== getInfo() ===');
+      const me = 'getInfo()';
+      const debugL2 = Debug(`${NS}:${me}`);
+
+      logger.info(`=== ${me} ===`);
       logger.info(`caAdminId: ${caAdminId}`);
       logger.info(`adminId: ${adminId}`);
       logger.info(`caName: ${caName}`);
@@ -192,8 +175,8 @@ export const createFabricGateway: (
       logger.info(`msp: ${mspId}`);
       logger.info(`defaultChannel: ${defaultChannel}`);
 
-      debug('wallletPath: %s', walletPath);
-      // debug('connectionProfile: %O', profile);
+      debugL2('wallletPath: %s', walletPath);
+      debugL2('connectionProfile: %O', profile);
 
       const info = {
         caName,
@@ -212,10 +195,10 @@ export const createFabricGateway: (
     },
     /* INITIALIZE */
     initialize: async (option) => {
-      const me = 'initialize()';
-      const debugL2 = Debug(`${NS}:initialize`);
+      const me = 'initialize';
+      const debugL2 = Debug(`${NS}:${me}`);
 
-      logger.info(`=== ${me} ===`);
+      logger.info(`=== ${me}() ===`);
 
       // Defaults
       const defaultEventHandlerOptions = {
@@ -258,7 +241,7 @@ export const createFabricGateway: (
         // Step 1: enroll ca admin
         if (!identity) {
           await enrollCaIdentity(caAdminId);
-          metricsOn && meters.enrollCount.add(1);
+          meters?.enrollCount.add(1);
         }
 
         // Step 2: enroll organization-admin
@@ -294,7 +277,9 @@ export const createFabricGateway: (
     },
     /* REGISTER */
     registerNewUser: async (enrollmentID, enrollmentSecret) => {
-      logger.info('=== registerNewUser() ===');
+      const me = 'registerNewUser';
+      logger.info(`=== ${me}() ===`);
+
       try {
         caAdminUserContext = await getUserContext(caAdminId);
 
@@ -315,7 +300,8 @@ export const createFabricGateway: (
     disconnect: () => gateway.disconnect(),
     /* IDENTITY INFO */
     getIdentityInfo: async (label) => {
-      logger.info('=== getIdentityInfo() ===');
+      const me = 'getIdentityInfo';
+      logger.info(`=== ${me}() ===`);
 
       try {
         const result: any = await wallet.get(label);
@@ -328,7 +314,7 @@ export const createFabricGateway: (
           credentials: { certificate: result?.credentials?.certificate },
         };
 
-        Debug(`${NS}:getIdentityInfo`)('getIdentityInfo, %O', identity);
+        Debug(`${NS}:${me}`)('result, %O', identity);
 
         return identity;
       } catch (e) {
@@ -338,14 +324,15 @@ export const createFabricGateway: (
     },
     /* QUERY CHANNEL */
     queryChannels: async () => {
-      logger.info('=== queryChannels() ===');
+      const me = 'queryChannels';
+      logger.info(`=== ${me}() ===`);
 
       try {
         const contract = network.getContract('cscc');
         const result = await contract.evaluateTransaction('GetChannels');
         const resultJson = fabprotos.protos.ChannelQueryResponse.decode(result);
 
-        Debug(`${NS}:queryChannels`)('queryChannels: %O', resultJson);
+        Debug(`${NS}:${me}`)('result: %O', resultJson);
 
         return resultJson;
       } catch (e) {
@@ -355,7 +342,8 @@ export const createFabricGateway: (
     },
     /* QUERY BLOCK */
     queryBlock: async (channelName, blockNum) => {
-      logger.info('=== queryChannels() ===');
+      const me = 'queryBlock';
+      logger.info(`=== ${me}() ===`);
 
       try {
         const contract = network.getContract('qscc');
@@ -366,9 +354,9 @@ export const createFabricGateway: (
         );
         const resultJson = BlockDecoder.decode(resultByte);
 
-        Debug(`${NS}:queryBlock`)('queryBlock, %O', resultJson);
+        Debug(`${NS}:${me}`)('result, %O', resultJson);
 
-        metricsOn && meters.queryBlockCount.add(1);
+        meters?.queryBlockCount.add(1);
 
         return resultJson;
       } catch (e) {
@@ -378,19 +366,22 @@ export const createFabricGateway: (
     },
     /* QUERY CHAIN HEIGHT */
     queryChannelHeight: async (channelName) => {
-      logger.info('=== queryChannelHeight() ===');
+      const me = 'queryChannelHeight';
+      logger.info(`=== ${me}() ===`);
 
       try {
         const contract = network.getContract('qscc');
         const resultByte = await contract.evaluateTransaction('GetChainInfo', channelName);
         const resultJson: any = fabprotos.common.BlockchainInfo.decode(resultByte);
 
-        Debug(`${NS}:queryChainInfo`)('queryChainInfo, %O', resultJson);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        const height = resultJson?.height?.low && parseInt(resultJson.height.low, 10) - 1;
 
-        return resultJson?.height?.low
-          ? // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-            parseInt(resultJson.height.low, 10) - 1
-          : null;
+        mCenter?.notify({ kind: 'info', title: MSG.CHANNEL_HEIGHT, data: height });
+
+        Debug(`${NS}:${me}`)('result, %O', resultJson);
+
+        return resultJson?.height?.low ? height : null;
       } catch (e) {
         logger.error(`fail to queryChannelHeight`);
         return null;
@@ -398,7 +389,40 @@ export const createFabricGateway: (
     },
     /* INITIALIZE CHANNEL EVENT HUBS */
     initializeChannelEventHubs: async () => {
-      logger.info('=== initializeChannelEventHubs() ===');
+      const me = 'initializeChannelEventHubs';
+      logger.info(`=== ${me}() ===`);
+      const save = true;
+      const broadcast = true;
+
+      const createChannelEventHub = async (channelName: string) => {
+        const current =
+          channelName === defaultChannel ? network : await gateway.getNetwork(channelName);
+
+        // Skip first block, it is process by peer event hub
+        channelEventHubs[channelName] = await current.addBlockListener(
+          async (event) => {
+            logger.info(`blocknum arrives: ${event.blockNumber.low}`);
+
+            if (!mCenter) logger.error('Message center not found; blocklistener cannot notify.');
+
+            return (
+              !(event.blockNumber.low === 0 && event.blockNumber.high === 0) &&
+              mCenter?.notify<BlockEvent>({
+                kind: 'system',
+                title: MSG.BLOCK_ARRIVAL,
+                desc: `blocknum ${event.blockNumber} arrives`,
+                data: event,
+                broadcast,
+                save,
+              })
+            );
+          },
+          { type: 'full' }
+        );
+
+        logger.info(`block listener added ${channelName}`);
+        return true;
+      };
 
       for await (const channelName of channels) {
         try {
@@ -408,6 +432,7 @@ export const createFabricGateway: (
           return null;
         }
       }
+      return true;
     },
   };
 };

@@ -1,20 +1,15 @@
 require('dotenv').config({ path: 'src/querydb/__tests__/.env.querydb' });
-import fs from 'fs';
-import path from 'path';
-import util from 'util';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import fetch from 'isomorphic-unfetch';
-import yaml from 'js-yaml';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import { createMessageCenter } from '../../message';
-import type { QueryDb, PlatformConfig, MessageCenter } from '../../types';
+import type { QueryDb, MessageCenter } from '../../types';
 import {
   CODE,
   createMetricServer,
   isBlocks,
   isCommit,
-  isPlatformConfig,
   isTransactions,
   logger,
   type Meters,
@@ -23,35 +18,14 @@ import {
 } from '../../utils';
 import { createQueryDb } from '../createQueryDb';
 import { Blocks, Commit, Transactions } from '../entities';
-import b0 from './__utils__/data/block-0.json';
-import b1 from './__utils__/data/block-1.json';
-import b10 from './__utils__/data/block-10.json';
-import b2 from './__utils__/data/block-2.json';
-import b3 from './__utils__/data/block-3.json';
-import b4 from './__utils__/data/block-4.json';
-import b5 from './__utils__/data/block-5.json';
-import b6 from './__utils__/data/block-6.json';
-import b7 from './__utils__/data/block-7.json';
-import b8 from './__utils__/data/block-8.json';
-import b9 from './__utils__/data/block-9.json';
-import t0 from './__utils__/data/tx-0.json';
-import t1 from './__utils__/data/tx-1.json';
-import t10 from './__utils__/data/tx-10.json';
-import t2 from './__utils__/data/tx-2.json';
-import t3 from './__utils__/data/tx-3.json';
-import t4 from './__utils__/data/tx-4.json';
-import t5 from './__utils__/data/tx-5.json';
-import t6 from './__utils__/data/tx-6.json';
-import t7 from './__utils__/data/tx-7.json';
-import t8 from './__utils__/data/tx-8.json';
-import t9 from './__utils__/data/tx-9.json';
+import { b0, b1, b10, b2, b3, b4, b5, b6, b7, b8, b9 } from './__utils__/data';
+import { t0, t1, t10, t2, t3, t4, t5, t6, t7, t8, t9 } from './__utils__/data';
 
 let messageCenter: MessageCenter;
 let queryDb: QueryDb;
 let defaultConnection: Connection;
 let testConnection: Promise<Connection>;
 let testConnectionOptions: ConnectionOptions;
-let platformConfig: PlatformConfig;
 let metrics: {
   meters: Partial<Meters>;
   exporter: PrometheusExporter;
@@ -119,11 +93,6 @@ const constructTxObj = (tx: Transactions, data: any) => {
 
 beforeAll(async () => {
   messageCenter = createMessageCenter({ logger });
-  messageCenter.subscribe({
-    next: (m) => console.log(util.format('📨 message received: %j', m)),
-    error: (e) => console.error(util.format('❌ message error: %j', e)),
-    complete: () => console.log('subscription completed'),
-  });
 
   try {
     metrics = createMetricServer('my-meter', {
@@ -140,26 +109,12 @@ beforeAll(async () => {
   }
 
   try {
-    const pathToConfig = path.join(process.cwd(), process.env.PLATFORM_CONFIG);
-    const file = fs.readFileSync(pathToConfig);
-    const loadedFile: unknown = yaml.load(file);
-    if (isPlatformConfig(loadedFile)) platformConfig = loadedFile;
-    else {
-      console.log(loadedFile);
-      console.error('invalid file format');
-      process.exit(1);
-    }
-  } catch {
-    console.error('fail to load file');
-    process.exit(1);
-  }
-
-  try {
+    // use different schema for testing
     defaultConnection = await createConnection(connectionOptions);
     await defaultConnection.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
     testConnectionOptions = {
       ...connectionOptions,
-      ...{ name: 'querydbtest', schema, synchronize: true, dropSchema: true },
+      ...{ name: schema, schema, synchronize: true, dropSchema: true },
     };
     testConnection = createConnection(testConnectionOptions);
 

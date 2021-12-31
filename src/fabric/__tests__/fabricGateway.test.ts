@@ -1,12 +1,14 @@
 require('dotenv').config({ path: 'src/fabric/__tests__/.env.fabricgateway' });
 import fs from 'fs';
 import path from 'path';
+import util from 'util';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import fetch from 'isomorphic-unfetch';
 import yaml from 'js-yaml';
 import rimraf from 'rimraf';
-import type { ConnectionProfile, FabricGateway } from '../../types';
+import { createMessageCenter } from '../../message';
+import type { ConnectionProfile, FabricGateway, MessageCenter } from '../../types';
 import {
   createMetricServer,
   isConnectionProfile,
@@ -20,7 +22,7 @@ import { createFabricGateway } from '../createFabricGateway';
 /*
 ./dev-net/run.sh
  */
-
+let messageCenter: MessageCenter;
 let fg: FabricGateway;
 let profile: ConnectionProfile;
 let metrics: {
@@ -30,6 +32,13 @@ let metrics: {
 };
 
 beforeAll(async () => {
+  messageCenter = createMessageCenter({ logger });
+  messageCenter.subscribe({
+    next: (m) => console.log(util.format('📨 message received: %j', m)),
+    error: (e) => console.error(util.format('❌ message error: %j', e)),
+    complete: () => console.log('subscription completed'),
+  });
+
   // removing pre-existing wallet
   try {
     await new Promise((resolve, reject) =>
@@ -71,7 +80,6 @@ beforeAll(async () => {
       adminSecret: process.env.ADMIN_SECRET,
       walletPath: process.env.WALLET,
       logger,
-      metricsOn: true,
       meters: metrics.meters,
     });
   } catch {
@@ -81,6 +89,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  messageCenter.getMessagesObs().unsubscribe();
   await waitForSecond(2);
   await metrics.meterProvider.shutdown();
   await metrics.exporter.stopServer();

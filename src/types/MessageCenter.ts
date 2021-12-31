@@ -1,4 +1,6 @@
-import { Observable, type Observer, ReplaySubject, Subscription } from 'rxjs';
+import { type Observer, ReplaySubject, Subscription } from 'rxjs';
+import { Connection } from 'typeorm';
+import { PaginatedIncident } from './index';
 
 export type Message<T = any> = {
   kind?: string;
@@ -14,9 +16,23 @@ export type Message<T = any> = {
   timestamp?: Date;
 };
 
+export type GetIncidentsOptions = {
+  take?: number;
+  skip?: number;
+  sort?: 'ASC' | 'DESC';
+  kind?: string;
+  title?: string;
+  orderBy?: string;
+};
+
 export type MessageCenter = {
+  connect?: () => Promise<Connection>;
+  disconnect?: () => Promise<void>;
+  isConnected?: () => Promise<boolean>;
   getInfo: () => any;
-  subscribe: (observer: Partial<Observer<Message>>) => Subscription;
+  subscribe: <T = any>(observer: Partial<Observer<Message<T>>>) => Subscription;
   getMessagesObs: () => ReplaySubject<Message>;
-  notify: (message: Message) => void;
+  notify: <T = any>(message: Message<T>) => void;
+  getSubscription: () => Subscription;
+  getIncidents: (option?: GetIncidentsOptions) => Promise<PaginatedIncident>;
 };

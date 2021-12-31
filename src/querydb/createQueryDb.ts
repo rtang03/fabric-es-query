@@ -100,6 +100,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
     getBlockHeight: async () => {
       const me = 'getBlockHeight()';
       try {
+        // NOTE: psql-only
         const result = await getManager().query(`SELECT MAX (blocknum) FROM ${schema}.blocks`);
         let blockHeight: number = result?.[0]?.max;
         if (!(blockHeight === undefined || blockHeight === null)) blockHeight = blockHeight + 1;
@@ -139,7 +140,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
         const result = await conn.getRepository(Blocks).save(b);
 
-        mCenter?.notify({ title: MSG.INSERT_BLOCK_OK, desc, broadcast, save });
+        mCenter?.notify({ title: MSG.INSERT_BLOCK_OK, desc, broadcast, save, data: b.blocknum });
 
         Debug(`${NS}:${me}`)('result: %O', result);
 
@@ -173,7 +174,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
         const result = await conn.getRepository(Transactions).save(tx);
 
-        mCenter?.notify({ title: MSG.INSERT_TX_OK, desc, broadcast, save });
+        mCenter?.notify({ title: MSG.INSERT_TX_OK, desc, broadcast, save, data: tx.txhash });
 
         Debug(`${NS}:${me}`)('result: %O', result);
 

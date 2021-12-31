@@ -23,8 +23,7 @@ export type FabricGateway = {
   queryBlock: (channelName: string, blockNum: number) => Promise<any>;
   queryChannelHeight: (channelName: string) => Promise<number>;
   getDefaultChannelName: () => string;
-  initializeChannelEventHubs: () => Promise<void>;
-  queryTransaction?: () => Promise<any>;
+  initializeChannelEventHubs: () => Promise<boolean>;
 };
 
 export type FabricGatewayInfo = {
