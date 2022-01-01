@@ -9,8 +9,8 @@ import b6 from './block-6.json';
 import b7 from './block-7.json';
 import b8 from './block-8.json';
 import b9 from './block-9.json';
-// import c1 from './commit-1.json';
-// import c2 from './commit-2.json';
+import c1 from './commit-1.json';
+import c2 from './commit-2.json';
 // import c3 from './commit-3.json';
 // import c4 from './commit-4.json';
 import t0 from './tx-0.json';
@@ -48,8 +48,8 @@ export {
   t7,
   t8,
   t9,
-  // c1,
-  // c2,
+  c1,
+  c2,
   // c3,
   // c4,
 };

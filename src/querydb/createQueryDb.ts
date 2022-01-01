@@ -334,16 +334,19 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
     },
     /* FIND COMMIT */
     findCommit: async (option) => {
+      const dev = option?.dev === undefined ? false : option.dev;
       const take = option?.take;
       const skip = option?.skip;
-      const orderBy = option?.orderBy || 'blockid';
+      const orderBy = option?.orderBy || 'commitId';
       const sort = option?.sort || 'ASC';
       const id = option?.id;
-      const entityName = option?.entityName;
       const commitId = option?.commitId;
       const entityId = option?.entityId;
       const mspId = option?.mspId;
       const me = 'findCommit';
+      const entityName = dev ? 'dev_entity' : option?.entityName;
+
+      if (!entityName) throw new Error('entityName is required');
 
       try {
         const where = {};
@@ -416,7 +419,11 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
             const valueJson: unknown = JSON.parse(value);
 
-            if (isCommit(valueJson) && !is_delete) return omit(valueJson, 'key');
+            valueJson['txhash'] = tx.txhash;
+            valueJson['blocknum'] = tx.blockid;
+
+            if (isCommit(valueJson) && !is_delete) return valueJson;
+            // if (isCommit(valueJson) && !is_delete) return omit(valueJson, 'key');
           }
           logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid}`);
           logger.error(`write_set: ${write_set}`);

@@ -1,0 +1,16 @@
+{
+  "id": "ent_id_123",
+  "entityName": "dev_entity",
+  "version": 0,
+  "commitId": "2",
+  "entityId": "ent_id_123",
+  "mspId": "Org2MSP",
+  "events": [
+    {
+      "type": "test",
+      "payload": "something else"
+    }
+  ],
+  "txhash": "456456",
+  "blocknum": 9
+}

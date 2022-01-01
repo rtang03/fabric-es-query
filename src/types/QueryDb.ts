@@ -12,6 +12,7 @@ export type FindPaginatedCommitOption = {
   commitId?: string;
   entityId?: string;
   mspId?: string;
+  dev?: boolean;
 };
 
 export type FindPaginatedBlockOption = {
@@ -42,7 +43,7 @@ export type QueryDb = {
   connect: () => Promise<Connection>;
   disconnect: () => Promise<void>;
   findBlock: (option?: FindPaginatedBlockOption) => Promise<PaginatedBlock>;
-  findCommit: (option?: FindPaginatedCommitOption) => Promise<PaginatedCommit>;
+  findCommit: (option: FindPaginatedCommitOption) => Promise<PaginatedCommit>;
   findMissingBlock: (maxHeight: number) => Promise<number[]>;
   findTxWithCommit: (option: FindPaginatedTransactionOption) => Promise<PaginatedTransaction>;
   getBlockHeight: () => Promise<number>;
