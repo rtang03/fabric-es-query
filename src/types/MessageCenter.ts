@@ -25,6 +25,14 @@ export type GetIncidentsOptions = {
   orderBy?: string;
 };
 
+export type GetIncidentsByPeriodOptions = {
+  sort?: 'ASC' | 'DESC';
+  kind?: string;
+  title?: string;
+  from?: Date;
+  to?: Date;
+};
+
 export type MessageCenter = {
   connect?: () => Promise<Connection>;
   disconnect?: () => Promise<void>;
@@ -35,4 +43,5 @@ export type MessageCenter = {
   notify: <T = any>(message: Message<T>) => void;
   getSubscription: () => Subscription;
   getIncidents: (option?: GetIncidentsOptions) => Promise<PaginatedIncident>;
+  getIncidentsByPeriod?: (option?: GetIncidentsByPeriodOptions) => Promise<PaginatedIncident>;
 };

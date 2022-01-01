@@ -151,5 +151,8 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
         return null;
       }
     },
+    getIncidentsByPeriod: async () => {
+      return Promise.reject(new Error('Not implemented yet'));
+    },
   };
 };

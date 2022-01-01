@@ -17,9 +17,11 @@ import {
   waitForSecond,
 } from '../../utils';
 import { createQueryDb } from '../createQueryDb';
-import { Blocks, Commit, Transactions } from '../entities';
+import { Blocks, Commit, Transactions, KeyValue } from '../entities';
 import { b0, b1, b10, b2, b3, b4, b5, b6, b7, b8, b9 } from './__utils__/data';
 import { t0, t1, t10, t2, t3, t4, t5, t6, t7, t8, t9 } from './__utils__/data';
+// import { c1, c2, c3, c4 } from './__utils__/data';
+import { range } from 'lodash';
 
 let messageCenter: MessageCenter;
 let queryDb: QueryDb;
@@ -44,7 +46,7 @@ const connectionOptions: ConnectionOptions = {
   logging: true,
   synchronize: false,
   dropSchema: false,
-  entities: [Blocks, Transactions, Commit],
+  entities: [Blocks, Transactions, Commit, KeyValue],
   connectTimeoutMS: 10000,
 };
 
@@ -92,7 +94,7 @@ const constructTxObj = (tx: Transactions, data: any) => {
 };
 
 beforeAll(async () => {
-  messageCenter = createMessageCenter({ logger });
+  messageCenter = createMessageCenter({ logger, persist: false });
 
   try {
     metrics = createMetricServer('my-meter', {
@@ -125,8 +127,8 @@ beforeAll(async () => {
       meters: metrics.meters,
       messageCenter,
     });
-  } catch {
-    logger.error('fail to createQueryDb');
+  } catch (e) {
+    logger.error('fail to createQueryDb: ', e);
     process.exit(1);
   }
 });
@@ -174,39 +176,86 @@ describe('query-db tests', () => {
     })
   );
 
-  it('getTxCount', async () => queryDb.getTxCount().then((result) => expect(result).toEqual(11)));
+  // it('getTxCount', async () => queryDb.getTxCount().then((result) => expect(result).toEqual(11)));
 
-  it('findMissingBlock, at = 5', async () =>
-    queryDb.findMissingBlock(5).then((result) => expect(result).toEqual([])));
+  // it('findMissingBlock, at = 5, returning []', async () =>
+  //   queryDb.findMissingBlock(5).then((result) => expect(result).toEqual([])));
+  //
+  // it('findMissingBlock, at = 13, returning [11, 12]', async () =>
+  //   queryDb.findMissingBlock(13).then((result) => expect(result).toEqual([11, 12])));
+  //
+  // it('findTxWithCommit: public commit tx, returning [7, 9]', async () =>
+  //   queryDb
+  //     .findTxWithCommit({ code: CODE.PUBLIC_COMMIT, orderBy: 'blockid' })
+  //     .then((result) => result.items.map(({ blockid }) => blockid))
+  //     .then((blockids) => expect(blockids).toEqual([7, 9])));
+  //
+  // it('findTxWithCommit: public commit tx, take 1, returning [7]', async () =>
+  //   queryDb
+  //     .findTxWithCommit({ code: CODE.PUBLIC_COMMIT, orderBy: 'blockid', skip: 0, take: 1 })
+  //     .then((result) => result.items.map(({ blockid }) => blockid))
+  //     .then((blockids) => expect(blockids).toEqual([7])));
+  //
+  // it('findTxWithCommit: private commit tx, returning [8, 10]', async () =>
+  //   queryDb
+  //     .findTxWithCommit({ code: CODE.PRIVATE_COMMIT, orderBy: 'blockid' })
+  //     .then((result) => result.items.map(({ blockid }) => blockid))
+  //     .then((blockids) => expect(blockids).toEqual([8, 10])));
+  //
+  // it('getPubCommit: all', async () =>
+  //   queryDb.parseBlocksToCommits().then(({ items, total, hasMore, cursor }) => {
+  //     expect(hasMore).toBeFalsy();
+  //     expect(total).toEqual(2);
+  //     expect(cursor).toEqual(2);
+  //     items.map((commit) => expect(isCommit(commit)).toBeTruthy());
+  //   }));
+  //
+  // it('getPubCommit: take 1', async () =>
+  //   queryDb.parseBlocksToCommits({ skip: 0, take: 1 }).then(({ items, total, hasMore, cursor }) => {
+  //     expect(hasMore).toBeTruthy();
+  //     expect(total).toEqual(2);
+  //     expect(cursor).toEqual(1);
+  //     items.map((commit) => expect(isCommit(commit)).toBeTruthy());
+  //   }));
 
-  it('findMissingBlock, at = 13', async () =>
-    queryDb.findMissingBlock(13).then((result) => expect(result).toEqual([11, 12])));
+  // it('findBlock: all', async () =>
+  //   queryDb.findBlock().then(({ items, total, hasMore, cursor }) => {
+  //     expect(hasMore).toBeFalsy();
+  //     expect(total).toEqual(11);
+  //     expect(cursor).toEqual(11);
+  //     items.map((block) => expect(isBlocks(block)).toBeTruthy());
+  //     expect(items.map(({ blocknum }) => blocknum)).toEqual(range(11));
+  //   }));
 
-  it('getPublicCommitTx', async () =>
-    queryDb
-      .getPublicCommitTx()
-      .then((result) => result.map(({ blockid }) => blockid))
-      .then((blockids) => expect(blockids).toEqual([7, 9])));
+  // it('findBlock: find one block', async () =>
+  //   queryDb.findBlock({ blocknum: 5 }).then(({ items, total, hasMore, cursor }) => {
+  //     expect(hasMore).toBeFalsy();
+  //     expect(total).toEqual(1);
+  //     expect(items.map(({ blocknum }) => blocknum)).toEqual([5]);
+  //   }));
+  //
+  // it('findBlock: find via range (2 - 4)', async () =>
+  //   queryDb.findBlock({ take: 3, skip: 2 }).then(({ items, total, hasMore, cursor }) => {
+  //     expect(hasMore).toBeTruthy();
+  //     expect(total).toEqual(11);
+  //     expect(cursor).toEqual(5);
+  //     expect(items.map(({ blocknum }) => blocknum)).toEqual([2, 3, 4]);
+  //   }));
 
-  it('getPrivateCommitTx', async () =>
-    queryDb
-      .getPrivateCommitTx()
-      .then((result) => result.map(({ blockid }) => blockid))
-      .then((blockids) => expect(blockids).toEqual([8, 10])));
+  it('', async () =>
+    queryDb.findCommit().then((result) => {
+      console.log(result);
+    }));
 
-  it('getPubCommit', async () =>
-    queryDb
-      .parseBlocksToCommits()
-      .then((result) => result.map((commit) => expect(isCommit(commit)).toBeTruthy())));
-
-  it('validate with metric server', async () => {
-    await waitForSecond(2);
-    const res = await fetch('http://localhost:9000/metrics');
-    expect(res.status).toEqual(200);
-
-    const metricText = await res.text();
-    console.log(metricText);
-
-    expect(metricText).toBeDefined();
-  });
+  //
+  // it('validate with metric server', async () => {
+  //   await waitForSecond(2);
+  //   const res = await fetch('http://localhost:9000/metrics');
+  //   expect(res.status).toEqual(200);
+  //
+  //   const metricText = await res.text();
+  //   console.log(metricText);
+  //
+  //   expect(metricText).toBeDefined();
+  // });
 });

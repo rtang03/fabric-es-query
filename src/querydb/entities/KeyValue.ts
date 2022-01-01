@@ -1,12 +1,8 @@
-import { PrimaryGeneratedColumn, Column, Entity, Index } from 'typeorm';
+import { PrimaryColumn, Column, Entity } from 'typeorm';
 
 @Entity('keyvalue')
 export class KeyValue {
-  @PrimaryGeneratedColumn()
-  id: string;
-
-  @Index()
-  @Column({ type: 'varchar', nullable: false, unique: true })
+  @PrimaryColumn({ type: 'varchar' })
   key: string;
 
   @Column({ type: 'varchar', nullable: false })

@@ -1,11 +1,8 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, PrimaryColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('blocks')
 export class Blocks {
-  @PrimaryGeneratedColumn({ type: 'int' })
-  id: number;
-
-  @Column({ type: 'int', nullable: true })
+  @PrimaryColumn({ type: 'int' })
   blocknum: number;
 
   @Column({ type: 'character varying', length: 256, nullable: true })

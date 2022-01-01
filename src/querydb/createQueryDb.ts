@@ -1,12 +1,13 @@
 import { type Tracer } from '@opentelemetry/api';
 import Debug from 'debug';
-import { omit, flatten, range } from 'lodash';
-import { Connection, Not, getManager } from 'typeorm';
+import { omit, flatten, range, includes } from 'lodash';
+import { Connection, Not, getManager, Repository } from 'typeorm';
 import winston from 'winston';
 import { MSG } from '../message';
-import type { MessageCenter, QueryDb } from '../types';
+import type { MessageCenter, PaginatedCommit, QueryDb } from '../types';
 import { CODE, isBlocks, isCommit, isTransactions, isWriteSet, type Meters } from '../utils';
-import { Blocks, Commit, Transactions } from './entities';
+import { KEY } from './constants';
+import { Blocks, Commit, KeyValue, Transactions } from './entities';
 
 export type CreateQueryDbOption = {
   connection: Promise<Connection>;
@@ -26,49 +27,18 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
   messageCenter: mCenter,
 }) => {
   let conn: Connection;
+  let txRepository: Repository<Transactions>;
+  let commitRepository: Repository<Commit>;
+  let blockRepository: Repository<Blocks>;
+  let kvRepository: Repository<KeyValue>;
 
   logger.info('Preparing query db');
 
   const NS = 'querydb';
   const schema = nonDefaultSchema || 'default';
 
-  const parseWriteSet = (tx: Transactions): Commit => {
-    let ws: unknown;
-    const { chaincodename, write_set, txhash, blockid } = tx;
-
-    try {
-      ws = JSON.parse(write_set);
-
-      Debug(`${NS}:parseWriteSet`)('txhash, %s', txhash);
-      Debug(`${NS}:parseWriteSet`)('%O', ws);
-    } catch {
-      logger.error(`fail to parseWriteSet(), txid: ${txhash}`);
-      return null;
-    }
-
-    try {
-      if (isWriteSet(ws)) {
-        const { key, value, is_delete } = ws.filter(
-          ({ chaincode }) => chaincode === chaincodename
-        )[0].set[0];
-
-        logger.info(`parsing ${key}, txid: ${txhash}, blockid: ${blockid}`);
-
-        const valueJson: unknown = JSON.parse(value);
-
-        if (isCommit(valueJson) && !is_delete) return omit(valueJson, 'key');
-      }
-      logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid}`);
-      logger.error(`write_set: ${write_set}`);
-      return null;
-    } catch (e) {
-      logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid} : `, e);
-      logger.error(`write_set: ${write_set}`);
-      return null;
-    }
-  };
-
   return {
+    /* CONNECT */
     connect: async () => {
       try {
         conn = await connection;
@@ -78,12 +48,18 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
         meters?.queryDbConnected.add(1);
 
+        txRepository = conn.getRepository(Transactions);
+        commitRepository = conn.getRepository(Commit);
+        blockRepository = conn.getRepository(Blocks);
+        kvRepository = conn.getRepository(KeyValue);
+
         return conn;
       } catch (e) {
         logger.error(`fail to connect : `, e);
         return null;
       }
     },
+    /* ISCONNECTED */
     isConnected: async () => {
       if (!conn?.isConnected) {
         logger.info('querydb is not connected');
@@ -91,14 +67,16 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
       }
       return true;
     },
+    /* DISCONNECT */
     disconnect: async () => {
       await conn.close();
       logger.info(`querydb disconnected`);
 
       meters?.queryDbConnected.add(-1);
     },
+    /* GET BLOCKHEIGHT */
     getBlockHeight: async () => {
-      const me = 'getBlockHeight()';
+      const me = 'getBlockHeight';
       try {
         // NOTE: psql-only
         const result = await getManager().query(`SELECT MAX (blocknum) FROM ${schema}.blocks`);
@@ -113,10 +91,11 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         return null;
       }
     },
+    /* GET TX COUNT */
     getTxCount: async () => {
-      const me = 'getTxCount()';
+      const me = 'getTxCount';
       try {
-        const result = await conn.getRepository(Transactions).count();
+        const result = await txRepository.count();
 
         Debug(`${NS}:${me}`)('result: %O', result);
 
@@ -126,42 +105,65 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         return null;
       }
     },
+    /* INSERT BLOCK */
     insertBlock: async (b: Blocks) => {
-      const me = 'insertBlock()';
+      const me = 'insertBlock';
       const desc = `blocknum: ${b.blocknum}`;
       const broadcast = true;
       const save = true;
+      let result;
 
+      // step 1: insert block
       try {
         if (!isBlocks(b)) {
           logger.error('unexpected error: invalid block format');
           return null;
         }
 
-        const result = await conn.getRepository(Blocks).save(b);
+        result = await blockRepository.save(b);
 
         mCenter?.notify({ title: MSG.INSERT_BLOCK_OK, desc, broadcast, save, data: b.blocknum });
 
         Debug(`${NS}:${me}`)('result: %O', result);
-
-        return result;
       } catch (error) {
         logger.error(`fail to ${me} : `, error);
+        const title = MSG.INSERT_BLOCK_FAIL;
 
-        mCenter?.notify({
-          kind: 'error',
-          title: MSG.INSERT_BLOCK_FAIL,
-          desc,
-          error,
-          broadcast,
-          save,
-        });
-
+        mCenter?.notify({ kind: 'error', title, desc, error, broadcast, save });
         return null;
       }
+
+      // step 2: update KeyValue "INSERTED_BLOCK"
+      try {
+        const insertedBlock = { key: KEY.INSERTED_BLOCK, modified: new Date() };
+
+        // load pre-existing
+        const keyvalue = await kvRepository.preload(insertedBlock);
+
+        // append new blocknum
+        insertedBlock['value'] = keyvalue?.value
+          ? `${keyvalue.value},${b.blocknum}`
+          : b.blocknum.toString();
+
+        const updatedResult = await kvRepository.save(insertedBlock);
+
+        Debug(`${NS}:${me}`)('updating keyvalue: %O', updatedResult);
+
+        if (!updatedResult) {
+          logger.error('unexpected error in updating key-value: insertedBlock');
+
+          const title = MSG.UPDATE_KV_INSERTEDBLOCK_FAIL;
+
+          mCenter.notify({ kind: 'error', title, desc, save, data: b.blocknum });
+        }
+      } catch (e) {
+        logger.error(`fail to keyvalue: insertedblock : `, e);
+      }
+      return result;
     },
+    /* INSERT TX */
     insertTransaction: async (tx) => {
-      const me = 'insertTransaction()';
+      const me = 'insertTransaction';
       const desc = `txhash: ${tx.txhash}; blocknum: ${tx.blockid}`;
       const broadcast = true;
       const save = true;
@@ -172,7 +174,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
           return null;
         }
 
-        const result = await conn.getRepository(Transactions).save(tx);
+        const result = await txRepository.save(tx);
 
         mCenter?.notify({ title: MSG.INSERT_TX_OK, desc, broadcast, save, data: tx.txhash });
 
@@ -187,66 +189,55 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         return null;
       }
     },
-    findMissingBlock: async (maxBlockNum) => {
-      const me = 'findMissingBlock()';
-      const result: number[] = [];
-      const all = range(maxBlockNum);
-      let currentBlockNum = 0;
+    /* INSERT COMMIT */
+    insertCommit: async (commit) => {
+      const me = 'insertCommit';
+      const desc = `entname: ${commit.entityName}; entId: ${commit.entityId} commitId: ${commit.commitId}`;
+      const broadcast = true;
+      const save = true;
 
       try {
-        for await (const itemNum of all) {
-          currentBlockNum = itemNum;
-          const block = await conn.getRepository(Blocks).find({ blocknum: itemNum });
-
-          !~~block.length && result.push(itemNum);
+        if (!isCommit(commit)) {
+          logger.error('unexpected error: invalid commit format');
+          return null;
         }
 
-        Debug(`${NS}:${me}`)('result: %O', result);
+        const result = await commitRepository.save(commit);
 
-        return result;
-      } catch (e) {
-        logger.error(`encounter error at ${currentBlockNum} out of ${maxBlockNum}`);
-        logger.error(`fail to ${me} : `, e);
-        return null;
-      }
-    },
-    getPublicCommitTx: async () => {
-      const me = 'getPublicCommitTx()';
-      try {
-        const result = await conn
-          .getRepository(Transactions)
-          .find({ where: [{ code: CODE.PUBLIC_COMMIT }], order: { blockid: 'ASC' } });
+        mCenter?.notify({ title: MSG.INSERT_COMMIT_OK, desc, broadcast, save });
 
         Debug(`${NS}:${me}`)('result: %O', result);
 
         return result;
-      } catch (e) {
-        logger.error(`fail to ${me} : `, e);
+      } catch (error) {
+        logger.error(`fail to ${me} : `, error);
+
+        const title = MSG.INSERT_COMMIT_FAIL;
+        mCenter?.notify({ kind: 'error', title, desc, error, broadcast, save });
+
         return null;
       }
     },
-    getPrivateCommitTx: async () => {
-      const me = 'getPrivateCommitTx()';
-      try {
-        const result = await conn
-          .getRepository(Transactions)
-          .find({ where: [{ code: CODE.PRIVATE_COMMIT }], order: { blockid: 'ASC' } });
+    /* FIND MISSING BLOCK */
+    findMissingBlock: async (maxBlockNum) => {
+      const me = 'findMissingBlock';
+      const all = range(maxBlockNum);
 
-        Debug(`${NS}:${me}`)('result: %O', result);
-
-        return result;
-      } catch (e) {
-        logger.error(`fail to ${me} : `, e);
-        return null;
-      }
-    },
-    findPublicCommitTxWithFailure: async () => {
-      const me = 'findPublicCommitTxWithFailure()';
       try {
-        const result = await conn.getRepository(Transactions).find({
-          where: [{ code: CODE.PUBLIC_COMMIT, validation_code: Not('VALID') }],
-          order: { blockid: 'ASC' },
-        });
+        const insertedBlock = await kvRepository.findOne(KEY.INSERTED_BLOCK);
+        const blocknumInKVStore = insertedBlock?.value
+          ?.split(',')
+          .map((item) => parseInt(item, 10));
+
+        Debug(`${NS}:${me}`)('blocknumArray: %O', blocknumInKVStore);
+
+        // no existing block found
+        if (!blocknumInKVStore || blocknumInKVStore?.length === 0) return all;
+
+        const result = all
+          .map<[number, boolean]>((blocknum) => [blocknum, includes(blocknumInKVStore, blocknum)])
+          .filter(([_, found]) => !found)
+          .map(([blocknum]) => blocknum);
 
         Debug(`${NS}:${me}`)('result: %O', result);
 
@@ -256,13 +247,82 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         return null;
       }
     },
-    findPrivateCommitTxWithFailure: async () => {
-      const me = 'findPrivateCommitTxWithFailure()';
+    /* FIND TX WITH COMMIT */
+    findTxWithCommit: async ({ take, skip, orderBy, sort, code, isValid }) => {
+      isValid = isValid === undefined ?? true;
+      sort = sort || 'ASC';
+      orderBy = orderBy || 'blockid';
+
+      const me = 'findTxWithCommit';
+      const validation_code = isValid ? 'VALID' : Not('VALID');
+
       try {
-        const result = await conn.getRepository(Transactions).find({
-          where: [{ code: CODE.PRIVATE_COMMIT, validation_code: Not('VALID') }],
-          order: { blockid: 'ASC' },
-        });
+        const where = {};
+        code && (where['code'] = code);
+        validation_code && (where['validation_code'] = validation_code);
+
+        const order = {};
+        orderBy && (order[orderBy] = sort);
+
+        const query = {};
+        (code || validation_code) && (query['where'] = where);
+        orderBy && (query['order'] = order);
+
+        Debug(`${NS}:${me}`)('query, %O', query);
+
+        const total = await txRepository.count(query);
+
+        take && (query['take'] = take);
+        skip && (query['skip'] = skip);
+
+        const items = await txRepository.find(query);
+
+        const hasMore = skip + take < total;
+        const cursor = hasMore ? skip + take : total;
+        const result = { total, items, hasMore, cursor };
+
+        // const result = await conn
+        //   .getRepository(Transactions)
+        //   .find({ where: [{ code: CODE.PUBLIC_COMMIT }], order: { blockid: 'ASC' } });
+        Debug(`${NS}:${me}`)('result: %O', result);
+
+        return result;
+      } catch (e) {
+        logger.error(`fail to ${me} : `, e);
+        return null;
+      }
+    },
+    /* FIND BLOCK */
+    findBlock: async (option) => {
+      const take = option?.take;
+      const skip = option?.skip;
+      const orderBy = option?.orderBy || 'blocknum';
+      const sort = option?.sort || 'ASC';
+      const blocknum = option?.blocknum;
+      const me = 'findBlock';
+      try {
+        const where = {};
+        blocknum && (where['blocknum'] = blocknum);
+
+        const order = {};
+        orderBy && (order[orderBy] = sort);
+
+        const query = {};
+        blocknum && (query['where'] = where);
+        orderBy && (query['order'] = order);
+
+        Debug(`${NS}:${me}`)('query, %O', query);
+
+        const total = await blockRepository.count(query);
+
+        take && (query['take'] = take);
+        skip && (query['skip'] = skip);
+
+        const items = await blockRepository.find(query);
+
+        const hasMore = skip + take < total;
+        const cursor = hasMore ? skip + take : total;
+        const result = { total, items, hasMore, cursor };
 
         Debug(`${NS}:${me}`)('result: %O', result);
 
@@ -272,18 +332,121 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         return null;
       }
     },
-    parseBlocksToCommits: async (isPrivate) => {
-      const me = 'parseBlockToCommits()';
-      const code = isPrivate ? CODE.PRIVATE_COMMIT : CODE.PUBLIC_COMMIT;
+    /* FIND COMMIT */
+    findCommit: async (option) => {
+      const take = option?.take;
+      const skip = option?.skip;
+      const orderBy = option?.orderBy || 'blockid';
+      const sort = option?.sort || 'ASC';
+      const id = option?.id;
+      const entityName = option?.entityName;
+      const commitId = option?.commitId;
+      const entityId = option?.entityId;
+      const mspId = option?.mspId;
+      const me = 'findCommit';
 
       try {
-        const transactions = await conn
-          .getRepository(Transactions)
-          .find({ where: [{ code }], order: { blockid: 'ASC' } });
+        const where = {};
+        id && (where['id'] = id);
+        entityName && (where['entityName'] = entityName);
+        commitId && (where['commitId'] = commitId);
+        entityId && (where['entityId'] = entityId);
+        mspId && (where['mspId'] = mspId);
+
+        const order = {};
+        orderBy && (order[orderBy] = sort);
+
+        const query = {};
+        (id || entityName || entityId || commitId || mspId) && (query['where'] = where);
+        orderBy && (query['order'] = order);
+
+        Debug(`${NS}:${me}`)('query, %O', query);
+
+        const total = await commitRepository.count(query);
+
+        take && (query['take'] = take);
+        skip && (query['skip'] = skip);
+
+        const items = await commitRepository.find(query);
+
+        const hasMore = skip + take < total;
+        const cursor = hasMore ? skip + take : total;
+        const result = { total, items, hasMore, cursor };
+
+        Debug(`${NS}:${me}`)('result: %O', result);
+
+        return result;
+      } catch (e) {
+        logger.error(`fail to ${me} : `, e);
+        return null;
+      }
+    },
+    /* PARSE BLOCKS TO COMMITS */
+    parseBlocksToCommits: async (option) => {
+      const me = 'parseBlockToCommits';
+      const take = option?.take;
+      const skip = option?.skip;
+      const code =
+        option?.isPrivate === undefined
+          ? CODE.PUBLIC_COMMIT
+          : option.isPrivate
+          ? CODE.PRIVATE_COMMIT
+          : CODE.PUBLIC_COMMIT;
+
+      // Parse one write_set
+      const parseWriteSet = (tx: Transactions): Commit => {
+        let ws: unknown;
+        const { chaincodename, write_set, txhash, blockid } = tx;
+        try {
+          ws = JSON.parse(write_set);
+
+          Debug(`${NS}:parseWriteSet`)('txhash, %s', txhash);
+          Debug(`${NS}:parseWriteSet`)('%O', ws);
+        } catch {
+          logger.error(`fail to parseWriteSet(), txid: ${txhash}`);
+          return null;
+        }
+        try {
+          if (isWriteSet(ws)) {
+            const { key, value, is_delete } = ws.filter(
+              ({ chaincode }) => chaincode === chaincodename
+            )[0].set[0];
+
+            logger.info(`parsing ${key}, txid: ${txhash}, blockid: ${blockid}`);
+
+            const valueJson: unknown = JSON.parse(value);
+
+            if (isCommit(valueJson) && !is_delete) return omit(valueJson, 'key');
+          }
+          logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid}`);
+          logger.error(`write_set: ${write_set}`);
+          return null;
+        } catch (e) {
+          logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid} : `, e);
+          logger.error(`write_set: ${write_set}`);
+          return null;
+        }
+      };
+      // End parse one write_set
+
+      try {
+        const query = {
+          where: { code, validation_code: 'VALID' },
+          order: { blockid: 'ASC' as any },
+        };
+
+        Debug(`${NS}:${me}`)('query, %O', query);
+
+        const total = await txRepository.count(query);
+
+        take && (query['take'] = take);
+        skip && (query['skip'] = skip);
+
+        const transactions = await txRepository.find(query);
 
         Debug(`${NS}:${me}`)('transactions: %O', transactions);
 
-        const result = flatten(
+        const items = flatten(
           transactions.map((tx) => {
             const parsedResult = parseWriteSet(tx);
 
@@ -301,7 +464,20 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
           })
         );
 
+        const allCommitValid = items.reduce((prev, curr) => prev && !!curr, true);
+
+        if (!allCommitValid) {
+          logger.error(`${me} fails: has null commit`);
+          return null;
+        }
+
+        const hasMore = skip + take < total;
+        const cursor = hasMore ? skip + take : total;
+        const result: PaginatedCommit = { total, items, hasMore, cursor };
+
         Debug(`${NS}:${me}`)('result: %O', result);
+
+        logger.info(`${me} done: total: ${total}, cursor: ${cursor}`);
 
         return result;
       } catch (e) {
