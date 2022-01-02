@@ -5,7 +5,7 @@ import type {
   DefaultQueryHandlerOptions,
 } from 'fabric-network';
 import type { ConnectedGatewayOptions } from 'fabric-network/lib/gateway';
-import { protos } from 'fabric-protos';
+import { common, protos } from 'fabric-protos';
 import ChannelQueryResponse = protos.ChannelQueryResponse;
 
 export type FabricGateway = {
@@ -20,7 +20,7 @@ export type FabricGateway = {
   disconnect: () => void;
   getIdentityInfo: (label: string) => Promise<Identity & { credentials: { certificate } }>;
   queryChannels: () => Promise<ChannelQueryResponse>;
-  queryBlock: (channelName: string, blockNum: number) => Promise<any>;
+  queryBlock: (channelName: string, blockNum: number) => Promise<common.IBlock>;
   queryChannelHeight: (channelName: string) => Promise<number>;
   getDefaultChannelName: () => string;
   initializeChannelEventHubs: () => Promise<boolean>;

@@ -1,5 +1,6 @@
 import { Incident } from '../message/entities';
 import { Blocks, Commit, Transactions } from '../querydb/entities';
+import { Job } from '../sync/entities';
 import type { Paginated } from './Paginated';
 
 export * from './FabricGateway';
@@ -16,3 +17,4 @@ export type PaginatedIncident = Paginated<Incident>;
 export type PaginatedCommit = Paginated<Commit>;
 export type PaginatedBlock = Paginated<Blocks>;
 export type PaginatedTransaction = Paginated<Transactions>;
+export type PaginatedJob = Paginated<Job>;

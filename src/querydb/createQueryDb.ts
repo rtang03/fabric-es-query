@@ -1,8 +1,9 @@
 import { type Tracer } from '@opentelemetry/api';
 import Debug from 'debug';
-import { omit, flatten, range, includes } from 'lodash';
+import { flatten, range, includes } from 'lodash';
 import { Connection, Not, getManager, Repository } from 'typeorm';
 import winston from 'winston';
+import WebSocket from 'ws';
 import { MSG } from '../message';
 import type { MessageCenter, PaginatedCommit, QueryDb } from '../types';
 import { CODE, isBlocks, isCommit, isTransactions, isWriteSet, type Meters } from '../utils';
@@ -12,6 +13,7 @@ import { Blocks, Commit, KeyValue, Transactions } from './entities';
 export type CreateQueryDbOption = {
   connection: Promise<Connection>;
   nonDefaultSchema?: string;
+  broadcaster?: WebSocket.Server;
   logger: winston.Logger;
   meters?: Partial<Meters>;
   tracer?: Tracer;
@@ -22,7 +24,6 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
   connection,
   nonDefaultSchema,
   meters,
-  tracer,
   logger,
   messageCenter: mCenter,
 }) => {

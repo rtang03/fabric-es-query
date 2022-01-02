@@ -19,9 +19,9 @@ import {
 } from 'fabric-network';
 import fabprotos from 'fabric-protos';
 import winston from 'winston';
+import { MSG } from '../message';
 import type { ConnectionProfile, FabricGateway, MessageCenter } from '../types';
 import { type Meters } from '../utils';
-import { MSG } from '../message';
 
 const { BlockDecoder } = require('fabric-common');
 
