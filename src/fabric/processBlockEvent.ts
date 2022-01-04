@@ -1,9 +1,9 @@
 import { common, protos } from 'fabric-protos';
 import sha from 'js-sha256';
 import winston from 'winston';
+import { Blocks, Transactions } from '../querydb/entities';
 import type { TBlock } from '../types';
 import { generateBlockHash } from './generateBlockHash';
-import { Blocks, Transactions } from '../querydb/entities';
 
 const convertFormatOfValue = (prop: string, encoding: string, obj: any) => {
   if (Array.isArray(obj)) {
@@ -19,8 +19,10 @@ const convertFormatOfValue = (prop: string, encoding: string, obj: any) => {
   }
 };
 
-export const processBlockEvent = (block: TBlock, logger?: winston.Logger) => {
-  // Prepare _validation_codes
+export const processBlockEvent = (
+  block: TBlock,
+  logger?: winston.Logger
+): [Blocks, Partial<Transactions>[]] => {
   const _validation_codes = {};
   // eslint-disable-next-line guard-for-in
   for (const key in protos.TxValidationCode) {
@@ -105,7 +107,7 @@ export const processBlockEvent = (block: TBlock, logger?: winston.Logger) => {
   };
 
   // Parse Transactions
-  block.data.data.forEach((txObj, index) => {
+  const transactions = block.data.data.map((txObj, index) => {
     const txStr = JSON.stringify(txObj);
     // const size = Buffer.byteLength(txStr);
     let txid = txObj.payload.header.channel_header.tx_id;
@@ -208,14 +210,8 @@ export const processBlockEvent = (block: TBlock, logger?: winston.Logger) => {
       endorser_id_bytes,
     };
 
-    console.log(transaction_row);
-
-    // Save Tx
+    return transaction_row;
   });
 
-  // Save Block
-  console.log(block_row);
-
-  // update blocksInProcess
-  return true;
+  return [block_row, transactions];
 };

@@ -1,7 +1,7 @@
 require('dotenv').config({ path: 'src/message/__tests__/.env.messagecenter' });
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import type { MessageCenter } from '../../types';
-import { isIncident, logger, waitForSecond } from '../../utils';
+import { isIncident, logger, waitSecond } from '../../utils';
 import { createMessageCenter } from '../createMessageCenter';
 import { Incident } from '../entities';
 import { m1a, m2a, m3a, m4a, m5a, m1b, m2b, m3b, m4b, m5b } from './__utils__/data';
@@ -48,12 +48,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await waitForSecond(2);
+  await waitSecond(2);
   mCenter.getSubscription().unsubscribe();
   mCenterWithSave.getSubscription().unsubscribe();
   await defaultConnection.close();
   await mCenterWithSave.disconnect();
-  await waitForSecond(2);
+  await waitSecond(2);
 });
 
 describe('message center test', () => {
@@ -77,7 +77,7 @@ describe('message center test', () => {
     [m1a, m2a, m3a, m4a, m5a].forEach((msg) =>
       mCenterWithSave.notify({ ...msg, timestamp: new Date() })
     );
-    await waitForSecond(1);
+    await waitSecond(1);
     return true;
   });
 

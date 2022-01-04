@@ -15,7 +15,7 @@ import {
   logger,
   type Meters,
   METERS,
-  waitForSecond,
+  waitSecond,
 } from '../../utils';
 import { createQueryDb } from '../createQueryDb';
 import { Blocks, Commit, Transactions, KeyValue } from '../entities';
@@ -50,61 +50,6 @@ const connectionOptions: ConnectionOptions = {
   connectTimeoutMS: 10000,
 };
 
-const constructBlockObj = (block: Blocks, data: any) => {
-  block.blocknum = data.blocknum;
-  block.datahash = data.datahash;
-  block.prehash = data.prehash;
-  block.txcount = data.txcount;
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  block.createdt = new Date(data.createdt);
-  block.blockhash = data.blockhash;
-  block.blksize = data.blksize;
-  return block;
-};
-const constructTxObj = (tx: Transactions, data: any) => {
-  tx.code =
-    data.validation_code === 'VALID' && data.status === 200
-      ? (data.chaincode_proposal_input as string).startsWith('createCommit')
-        ? CODE.PUBLIC_COMMIT
-        : (data.chaincode_proposal_input as string).startsWith('privatedata:createCommit')
-        ? CODE.PRIVATE_COMMIT
-        : CODE.UNKNOWN
-      : CODE.UNKNOWN;
-  tx.blockid = data.blockid;
-  tx.txhash = data.txhash;
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  tx.createdt = new Date(data.createdt);
-  tx.chaincodename = data?.chaincodename || '';
-  tx.status = data?.status || 0;
-  tx.creator_msp_id = data?.creator_msp_id || '';
-  tx.endorser_msp_id = data?.endorser_msp_id || '';
-  tx.type = data.type;
-  tx.read_set = data.read_set;
-  tx.write_set = data.write_set;
-  tx.validation_code = data.validation_code;
-  tx.envelope_signature = data.envelope_signature;
-  tx.payload_extension = data.payload_extension;
-  tx.creator_id_bytes = data.creator_id_bytes;
-  tx.creator_nonce = data.creator_nonce;
-  tx.chaincode_proposal_input = data.chaincode_proposal_input;
-  tx.payload_proposal_hash = data.payload_proposal_hash;
-  tx.endorser_id_bytes = data.endorser_id_bytes;
-  tx.endorser_signature = data.endorser_signature;
-  return tx;
-};
-const constructCommitObj = (commit: Commit, data: any) => {
-  commit.commitId = data.commitId;
-  commit.id = data.id;
-  commit.entityName = data.entityName;
-  commit.entityId = data.entityId;
-  commit.mspId = data.mspId;
-  commit.events = data.events;
-  commit.blocknum = data.blocknum;
-  commit.txhash = data.txhash;
-  commit.version = data.version;
-  commit.key = `${data.entityName}:${data.entityId}:${data.commitId}`;
-  return commit;
-};
 const noResult = { total: 0, items: [], hasMore: false, cursor: 0 };
 
 beforeAll(async () => {
@@ -152,7 +97,7 @@ afterAll(async () => {
   await defaultConnection.close();
   await queryDb.disconnect();
   await metrics.meterProvider.shutdown();
-  await waitForSecond(3);
+  await waitSecond(3);
 });
 
 describe('query-db tests', () => {
@@ -170,11 +115,8 @@ describe('query-db tests', () => {
     queryDb.getBlockHeight().then((result) => expect(result).toBeNull()));
 
   [b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10].forEach((item) =>
-    it(`insertBlock - ${item.blocknum}`, async () => {
-      const block = new Blocks();
-      const result = await queryDb.insertBlock(constructBlockObj(block, item));
-      expect(isBlocks(result)).toBeTruthy();
-    })
+    it(`insertBlock - ${item.blocknum}`, async () =>
+      queryDb.insertBlock(new Blocks(item)).then((result) => expect(isBlocks(result)).toBeTruthy()))
   );
 
   it('getBlockHeight #2', async () =>
@@ -184,8 +126,8 @@ describe('query-db tests', () => {
 
   [t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10].forEach((item) =>
     it(`insertTransaction - ${item.blockid}`, async () => {
-      const tx = new Transactions();
-      const result = await queryDb.insertTransaction(constructTxObj(tx, item));
+      const tx = new Transactions(item);
+      const result = await queryDb.insertTransaction(tx);
       expect(isTransactions(result)).toBeTruthy();
     })
   );
@@ -216,9 +158,8 @@ describe('query-db tests', () => {
       .then((result) => result.items.map(({ blockid }) => blockid))
       .then((blockids) => expect(blockids).toEqual([8, 10])));
 
-
   it('getPubCommit: all', async () =>
-    queryDb.parseBlocksToCommits().then(({ items, total, hasMore, cursor }) => {
+    queryDb.queryPaginatedTxAndParseToCommits().then(({ items, total, hasMore, cursor }) => {
       expect(hasMore).toBeFalsy();
       expect(total).toEqual(2);
       expect(cursor).toEqual(2);
@@ -226,12 +167,14 @@ describe('query-db tests', () => {
     }));
 
   it('getPubCommit: take 1', async () =>
-    queryDb.parseBlocksToCommits({ skip: 0, take: 1 }).then(({ items, total, hasMore, cursor }) => {
-      expect(hasMore).toBeTruthy();
-      expect(total).toEqual(2);
-      expect(cursor).toEqual(1);
-      items.forEach((commit) => expect(isCommit(commit)).toBeTruthy());
-    }));
+    queryDb
+      .queryPaginatedTxAndParseToCommits({ skip: 0, take: 1 })
+      .then(({ items, total, hasMore, cursor }) => {
+        expect(hasMore).toBeTruthy();
+        expect(total).toEqual(2);
+        expect(cursor).toEqual(1);
+        items.forEach((commit) => expect(isCommit(commit)).toBeTruthy());
+      }));
 
   it('findBlock: all', async () =>
     queryDb.findBlock().then(({ items, total, hasMore, cursor }) => {
@@ -258,13 +201,10 @@ describe('query-db tests', () => {
     }));
 
   [c1, c2].forEach((data) =>
-    it(`insert commit - ${data.commitId}`, async () => {
-      const commit = new Commit();
-
-      return queryDb
-        .insertCommit(constructCommitObj(commit, data))
-        .then((result) => expect(isCommit(result)).toBeTruthy());
-    })
+    it(`insert commit - ${data.commitId}`, async () =>
+      queryDb
+        .insertCommit(new Commit(data))
+        .then((result) => expect(isCommit(result)).toBeTruthy()))
   );
 
   it('findCommit: all', async () =>

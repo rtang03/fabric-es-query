@@ -38,6 +38,46 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
   const NS = 'querydb';
   const schema = nonDefaultSchema || 'default';
 
+  // Parse one write_set
+  const parseWriteSet = (tx: Transactions): Commit => {
+    let ws: unknown;
+    const { chaincodename, write_set, txhash, blockid } = tx;
+    try {
+      ws = JSON.parse(write_set);
+
+      Debug(`${NS}:parseWriteSet`)('txhash, %s', txhash);
+      Debug(`${NS}:parseWriteSet`)('%O', ws);
+    } catch {
+      logger.error(`fail to parseWriteSet(), txid: ${txhash}`);
+      return null;
+    }
+    try {
+      if (isWriteSet(ws)) {
+        const { key, value, is_delete } = ws.filter(
+          ({ chaincode }) => chaincode === chaincodename
+        )[0].set[0];
+
+        logger.info(`parsing ${key}, txid: ${txhash}, blockid: ${blockid}`);
+
+        const valueJson: unknown = JSON.parse(value);
+
+        valueJson['txhash'] = tx.txhash;
+        valueJson['blocknum'] = tx.blockid;
+
+        if (isCommit(valueJson) && !is_delete) return valueJson;
+        // if (isCommit(valueJson) && !is_delete) return omit(valueJson, 'key');
+      }
+      logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid}`);
+      logger.error(`write_set: ${write_set}`);
+      return null;
+    } catch (e) {
+      logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid} : `, e);
+      logger.error(`write_set: ${write_set}`);
+      return null;
+    }
+  };
+  // End parse one write_set
+
   return {
     /* CONNECT */
     connect: async () => {
@@ -219,7 +259,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         return null;
       }
     },
-    /* FIND MISSING BLOCK */
+    /* FIND MISSING BLOCK from KV */
     findMissingBlock: async (maxBlockNum) => {
       const me = 'findMissingBlock';
       const all = range(maxBlockNum);
@@ -385,8 +425,8 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         return null;
       }
     },
-    /* PARSE BLOCKS TO COMMITS */
-    parseBlocksToCommits: async (option) => {
+    /* RETRIEVE TX AND THEN PARSE INTO COMMITS */
+    queryPaginatedTxAndParseToCommits: async (option) => {
       const me = 'parseBlockToCommits';
       const take = option?.take;
       const skip = option?.skip;
@@ -396,46 +436,6 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
           : option.isPrivate
           ? CODE.PRIVATE_COMMIT
           : CODE.PUBLIC_COMMIT;
-
-      // Parse one write_set
-      const parseWriteSet = (tx: Transactions): Commit => {
-        let ws: unknown;
-        const { chaincodename, write_set, txhash, blockid } = tx;
-        try {
-          ws = JSON.parse(write_set);
-
-          Debug(`${NS}:parseWriteSet`)('txhash, %s', txhash);
-          Debug(`${NS}:parseWriteSet`)('%O', ws);
-        } catch {
-          logger.error(`fail to parseWriteSet(), txid: ${txhash}`);
-          return null;
-        }
-        try {
-          if (isWriteSet(ws)) {
-            const { key, value, is_delete } = ws.filter(
-              ({ chaincode }) => chaincode === chaincodename
-            )[0].set[0];
-
-            logger.info(`parsing ${key}, txid: ${txhash}, blockid: ${blockid}`);
-
-            const valueJson: unknown = JSON.parse(value);
-
-            valueJson['txhash'] = tx.txhash;
-            valueJson['blocknum'] = tx.blockid;
-
-            if (isCommit(valueJson) && !is_delete) return valueJson;
-            // if (isCommit(valueJson) && !is_delete) return omit(valueJson, 'key');
-          }
-          logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid}`);
-          logger.error(`write_set: ${write_set}`);
-          return null;
-        } catch (e) {
-          logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid} : `, e);
-          logger.error(`write_set: ${write_set}`);
-          return null;
-        }
-      };
-      // End parse one write_set
 
       try {
         const query = {

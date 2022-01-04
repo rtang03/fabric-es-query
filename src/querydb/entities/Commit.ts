@@ -73,4 +73,17 @@ export class Commit {
   // reserved for future use
   @Column({ type: 'varchar', nullable: true })
   signedRequest?: string;
+
+  constructor(data) {
+    this.commitId = data.commitId;
+    this.id = data.id;
+    this.entityName = data.entityName;
+    this.entityId = data.entityId;
+    this.mspId = data.mspId;
+    this.events = data.events;
+    this.blocknum = data.blocknum;
+    this.txhash = data.txhash;
+    this.version = data.version;
+    this.key = `${data.entityName}:${data.entityId}:${data.commitId}`;
+  }
 }

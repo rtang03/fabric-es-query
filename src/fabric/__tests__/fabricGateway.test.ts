@@ -15,7 +15,7 @@ import {
   logger,
   type Meters,
   METERS,
-  waitForSecond,
+  waitSecond,
 } from '../../utils';
 import { createFabricGateway } from '../createFabricGateway';
 
@@ -90,7 +90,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   messageCenter.getMessagesObs().unsubscribe();
-  await waitForSecond(2);
+  await waitSecond(2);
   await metrics.meterProvider.shutdown();
   await metrics.exporter.stopServer();
 });
@@ -145,7 +145,7 @@ describe('fabricGateway tests', () => {
       .then((result) => expect(typeof result).toBe('number')));
 
   it('validate with metric server', async () => {
-    await waitForSecond(2);
+    await waitSecond(2);
 
     const res = await fetch('http://localhost:9000/metrics');
     expect(res.status).toEqual(200);

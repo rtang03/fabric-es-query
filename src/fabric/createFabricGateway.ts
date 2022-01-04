@@ -22,6 +22,7 @@ import winston from 'winston';
 import { MSG } from '../message';
 import type { ConnectionProfile, FabricGateway, MessageCenter } from '../types';
 import { type Meters } from '../utils';
+import { processBlockEvent } from './processBlockEvent';
 
 const { BlockDecoder } = require('fabric-common');
 
@@ -434,5 +435,7 @@ export const createFabricGateway: (
       }
       return true;
     },
+    /* PARSE BLOCK DATA */
+    processBlockEvent: (block) => processBlockEvent(block, logger),
   };
 };

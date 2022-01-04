@@ -23,7 +23,7 @@
     "test:mcenter": "jest mcenter.test",
     "test:mcenter-debug": "DEBUG=mcenter* jest mcenter.test",
     "test:sync": "jest synchronizer.test",
-    "test:sync-debug": "jest DEBUG=sync* synchronizer.test",
+    "test:sync-debug": "jest DEBUG=* synchronizer.test",
     "server": "node --require './dist/tracing.js' ./dist/app.js",
     "client": "node --experimental-modules ./dist/client.js",
     "start": "node ./dist/sync.js"

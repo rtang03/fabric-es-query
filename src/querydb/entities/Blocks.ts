@@ -22,4 +22,15 @@ export class Blocks {
 
   @Column({ type: 'int', nullable: true })
   blksize: number;
+
+  constructor(data) {
+    this.blocknum = data.blocknum;
+    this.datahash = data.datahash;
+    this.prehash = data.prehash;
+    this.txcount = data.txcount;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    this.createdt = new Date(data.createdt);
+    this.blockhash = data.blockhash;
+    this.blksize = data.blksize;
+  }
 }

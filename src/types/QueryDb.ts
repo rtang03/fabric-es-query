@@ -32,7 +32,7 @@ export type FindPaginatedTransactionOption = {
   isValid?: boolean;
 };
 
-export type ParseBlocksToCommitsOption = {
+export type QueryPagTxParseToCommitsOption = {
   take?: number;
   skip?: number;
   isPrivate?: boolean;
@@ -52,7 +52,9 @@ export type QueryDb = {
   insertCommit: (commit: Commit) => Promise<Commit>;
   insertTransaction: (tx: Transactions) => Promise<Transactions>;
   isConnected: () => Promise<boolean>;
-  parseBlocksToCommits: (option?: ParseBlocksToCommitsOption) => Promise<PaginatedCommit>;
+  queryPaginatedTxAndParseToCommits: (
+    option?: QueryPagTxParseToCommitsOption
+  ) => Promise<PaginatedCommit>;
   removeAllBlock?: () => Promise<boolean>;
   removeAllCommit?: () => Promise<boolean>;
   removeAllTransaction?: () => Promise<boolean>;
