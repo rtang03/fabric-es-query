@@ -3,7 +3,7 @@ import sha from 'js-sha256';
 import winston from 'winston';
 import { Blocks, Transactions } from '../querydb/entities';
 import type { TBlock } from '../types';
-import { generateBlockHash } from './generateBlockHash';
+// import { generateBlockHash } from './generateBlockHash';
 
 const convertFormatOfValue = (prop: string, encoding: string, obj: any) => {
   if (Array.isArray(obj)) {
@@ -94,10 +94,10 @@ export const processBlockEvent = (
   const header = first_tx.payload.header;
   // const channel_name = header.channel_header.channel_id;
   const createdt = new Date(header.channel_header.timestamp);
-  const blockhash = generateBlockHash(block.header);
+  const blockhash = ''; // generateBlockHash(block.header);
 
-  const block_row: Omit<Blocks, 'id'> = {
-    blocknum: block.header.number,
+  const block_row: Omit<Blocks, 'setData'> = {
+    blocknum: Number(block.header.number),
     datahash: block.header.data_hash.toString('hex'),
     prehash: block.header.previous_hash.toString('hex'),
     txcount: block.data.data.length,
@@ -119,7 +119,7 @@ export const processBlockEvent = (
           block.metadata.metadata[common.BlockMetadataIndex.TRANSACTIONS_FILTER][index]
         )
       : '';
-    const envelope_signature = txObj?.signature?.toString('hex');
+    // const envelope_signature = txObj?.signature?.toString('hex');
 
     const payload_extension = txObj.payload?.header?.channel_header?.extension?.toString('hex');
 
@@ -165,7 +165,10 @@ export const processBlockEvent = (
 
       chaincode_proposal_input =
         firstAction.payload?.chaincode_proposal_payload?.input?.chaincode_spec?.input?.args
-          ?.map((arg) => arg?.toString())
+          ?.map((arg) => {
+            // only parse eventstore chaincode
+            return chaincode === 'eventstore' ? arg?.toString() : '';
+          })
           .reduce((prev, curr) => `${prev === '' ? '' : prev + ','}${curr}`, '');
 
       endorser_signature =
@@ -189,7 +192,7 @@ export const processBlockEvent = (
     const write_set = JSON.stringify(writeSet, null, 2);
 
     const transaction_row: Omit<Transactions, 'id' | 'code'> = {
-      blockid: block.header.number,
+      blockid: Number(block.header.number),
       txhash: txid,
       createdt: new Date(txObj.payload?.header?.channel_header?.timestamp),
       chaincodename: chaincode,
@@ -200,7 +203,6 @@ export const processBlockEvent = (
       read_set,
       write_set,
       validation_code,
-      envelope_signature,
       payload_extension,
       creator_nonce,
       chaincode_proposal_input,

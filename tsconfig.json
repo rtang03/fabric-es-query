@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "outDir": "dist",
     "target": "es2021",
     "moduleResolution": "node",
@@ -7,7 +8,7 @@
     "module": "esnext",
     "declaration": true,
     "sourceMap": false,
-    "types": ["node", "jest"],
+    "types": ["node", "jest", "react-redux"],
     "lib": ["es2021", "dom", "esnext.asynciterable"],
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,

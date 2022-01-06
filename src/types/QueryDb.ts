@@ -58,5 +58,8 @@ export type QueryDb = {
   removeAllBlock?: () => Promise<boolean>;
   removeAllCommit?: () => Promise<boolean>;
   removeAllTransaction?: () => Promise<boolean>;
-  replaceBlock?: (blockNum: number) => Promise<any>;
+  findUnverified: () => Promise<number[]>;
+  updateVerified: (blocknum: number, verified: boolean) => Promise<boolean>;
+  removeUnverifiedBlock: (blocknum: number) => Promise<any>;
+  updateInsertedBlockKeyValue: (blocknum: number) => Promise<any>;
 };

@@ -74,7 +74,7 @@ export class Commit {
   @Column({ type: 'varchar', nullable: true })
   signedRequest?: string;
 
-  constructor(data) {
+  setData?(data) {
     this.commitId = data.commitId;
     this.id = data.id;
     this.entityName = data.entityName;

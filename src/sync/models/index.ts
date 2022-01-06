@@ -1,4 +1,4 @@
-import { Models } from '@rematch/core';
+import { type Models } from '@rematch/core';
 import { syncJob } from './SyncJob';
 
 export interface RootModel extends Models<RootModel> {

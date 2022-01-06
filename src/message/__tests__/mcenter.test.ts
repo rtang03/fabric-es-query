@@ -57,10 +57,10 @@ afterAll(async () => {
 });
 
 describe('message center test', () => {
-  // it('notify - console only', async () => {
-  //   [m1b, m2b, m3b, m4b, m5b].forEach((msg) => mCenter.notify({ ...msg, timestamp: new Date() }));
-  //   return true;
-  // });
+  it('notify - console only', async () => {
+    [m1b, m2b, m3b, m4b, m5b].forEach((msg) => mCenter.notify({ ...msg, timestamp: new Date() }));
+    return true;
+  });
 
   it('mCenterWithSave isConnected', async () =>
     mCenterWithSave.isConnected().then((result) => expect(result).toBeFalsy()));

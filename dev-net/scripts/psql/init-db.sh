@@ -6,14 +6,14 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
 
   CREATE TABLE IF NOT EXISTS blocks
   (
-    id SERIAL PRIMARY KEY,
-    blocknum integer DEFAULT NULL,
+    blocknum integer PRIMARY KEY,
     datahash character varying(256) DEFAULT NULL,
     prehash character varying(256) DEFAULT NULL,
     txcount integer DEFAULT NULL,
     createdt Timestamp DEFAULT NULL,
     blockhash character varying(256) DEFAULT NULL,
-    blksize integer DEFAULT NULL
+    blksize integer DEFAULT NULL,
+    verified boolean DEFAULT FALSE
   );
 
   CREATE TABLE IF NOT EXISTS transactions
@@ -32,7 +32,6 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
     write_set json default NULL,
     channel_genesis_hash character varying(256) DEFAULT NULL,
     validation_code character varying(255) DEFAULT NULL,
-    envelope_signature character varying DEFAULT NULL,
     payload_extension character varying DEFAULT NULL,
     creator_id_bytes character varying DEFAULT NULL,
     creator_nonce character varying DEFAULT NULL,
@@ -46,6 +45,9 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
 
   CREATE INDEX ON Blocks
   (blocknum);
+
+  CREATE INDEX ON Blocks
+  (verified);
 
   CREATE INDEX ON Blocks
   (createdt);

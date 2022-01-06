@@ -1,9 +1,11 @@
 import { createModel } from '@rematch/core';
+import Debug from 'debug';
 import { isEqual, range, takeRight, tail } from 'lodash';
 import winston from 'winston';
+import { KIND, MSG } from '../../message';
 import { parseWriteSet } from '../../querydb';
 import { Blocks, Commit, Transactions } from '../../querydb/entities';
-import type { FabricGateway, QueryDb } from '../../types';
+import type { FabricGateway, MessageCenter, QueryDb } from '../../types';
 import { promiseWithTimeout, waitSecond } from '../../utils';
 import type { RootModel } from '.';
 
@@ -31,6 +33,8 @@ type SyncJobState = {
   completed?: number[];
   blockHasCommit?: number[];
   blockHasNoCommit?: number[];
+  unverifiedBlockFound?: number[];
+  unverifiedBlockDeleted?: number[];
 };
 
 export type TArgs = {
@@ -40,6 +44,7 @@ export type TArgs = {
     timeout?: number;
     fabric?: FabricGateway;
     queryDb?: QueryDb;
+    messageCenter?: MessageCenter;
     logger?: winston.Logger;
   };
 };
@@ -63,7 +68,11 @@ const TEMPLATE: SyncJobState = {
   queued: [],
   blockHasCommit: [],
   blockHasNoCommit: [],
+  unverifiedBlockFound: [],
+  unverifiedBlockDeleted: [],
 };
+
+const NS = 'sync';
 
 export const syncJob = createModel<RootModel>()({
   state: TEMPLATE as SyncJobState,
@@ -167,11 +176,26 @@ export const syncJob = createModel<RootModel>()({
       lastModified: new Date(),
       running: state.running && status === 'ok' ? false : state.running,
     }),
+    setUnverifiedBlockFound: (
+      state,
+      [unverifiedBlockFound, alias]: [unverifiedBlockFound: number[], alias?: string]
+    ) => ({
+      ...state,
+      alias,
+      unverifiedBlockFound,
+      lastModified: new Date(),
+    }),
+    setUnverifiedBlockDeleted: (state, [blocknum, alias]: [blocknum: number, alias?: string]) => ({
+      ...state,
+      alias,
+      unverifiedBlockDeleted: [...state.unverifiedBlockDeleted, blocknum],
+      lastModified: new Date(),
+    }),
     failed: (state, [error, alias]: [error: any, alias?: string]) => ({
       ...state,
       alias,
       status: 'error',
-      error,
+      error: error.message,
       lastModified: new Date(),
       running: false,
     }),
@@ -189,7 +213,17 @@ export const syncJob = createModel<RootModel>()({
       const logger = payload?.option?.logger;
       const fabric = payload?.option?.fabric;
       const queryDb = payload?.option?.queryDb;
+      const mCenter = payload?.option?.messageCenter;
       const timeout = payload?.option?.timeout || 10000;
+      const notifyMessageCenterWhenError = (blocknum: number) =>
+        mCenter?.notify({
+          kind: KIND.ERROR,
+          title: MSG.SYNCJOB_FAIL,
+          desc: `error in ${blocknum}`,
+          error: new Error(`error in ${blocknum}`),
+          broadcast: true,
+          save: true,
+        });
 
       if (!fabric) throw new Error('fabric-gateway not found');
       if (!queryDb) throw new Error('queryDb not found');
@@ -203,28 +237,91 @@ export const syncJob = createModel<RootModel>()({
 
       dispatch.syncJob.init([payload.tx_id, 'step1:init']);
 
-      /**
-       * step 1: get block height from live Fabric
-       */
-      let CURRENT = 'step1';
-      let errorMsg: string;
-
       const catchErrorAndDispatchFailure = (currentStep, e: any, errorMessage: string) => {
         logger.error(errorMessage);
+        logger.error(e);
+
         if (e instanceof Error && e.message === 'timeout')
           dispatch.syncJob.failed([e, `${currentStep}:failed`]);
         else dispatch.syncJob.failed([new Error(errorMessage), `${currentStep}:failed`]);
       };
 
+      let errorMsg: string;
+
+      /**
+       * step 0a: check unverified block
+       */
+      let CURRENT = 'step0a';
+      let unverified: number[];
+      errorMsg = 'fail to find unverified blocks';
+      try {
+        unverified = await promiseWithTimeout(queryDb.findUnverified(), timeout);
+
+        Debug(NS)('step0a: unverified blocks, %s', unverified.toString());
+
+        if (!unverified) {
+          logger.error(errorMsg);
+          dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
+          return;
+        }
+      } catch (e) {
+        catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
+        return;
+      }
+      dispatch.syncJob.setUnverifiedBlockFound([unverified, `${CURRENT}:setUnverifiedBlockFound`]);
+
+      /**
+       * step 0b: remove unverified block
+       */
+      CURRENT = 'step0b';
+      let removedUnverifiedBlockResult;
+
+      if (isEqual(unverified, [])) logger.info('no unverified blocks');
+
+      for await (const blocknum of unverified) {
+        errorMsg = `fail to remove unverified block ${blocknum}`;
+        try {
+          removedUnverifiedBlockResult = await promiseWithTimeout(
+            queryDb.removeUnverifiedBlock(blocknum),
+            timeout
+          );
+
+          if (!removedUnverifiedBlockResult) {
+            logger.error(errorMsg);
+
+            dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
+            return;
+          }
+        } catch (e) {
+          catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
+          return;
+        }
+        dispatch.syncJob.setUnverifiedBlockDeleted([
+          blocknum,
+          `${CURRENT}:setUnverifiedBlockDeleted`,
+        ]);
+      }
+
+      /**
+       * step 1: get block height from live Fabric
+       */
+      CURRENT = 'step1';
       errorMsg = 'invalid blockheight / fabric';
       try {
-        heightFabric = await promiseWithTimeout(fabric.queryChannelHeight('eventstore'), timeout);
+        heightFabric = await promiseWithTimeout(
+          fabric.queryChannelHeight(fabric.getDefaultChannelName()),
+          timeout
+        );
+
+        Debug(NS)('step1: heightFabric %s', heightFabric);
+
         if (!heightFabric) {
           logger.error(errorMsg);
           dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
           return;
         }
       } catch (e) {
+        console.log(e);
         catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
         return;
       }
@@ -242,11 +339,14 @@ export const syncJob = createModel<RootModel>()({
       errorMsg = 'invalid blockheight / queydb';
       try {
         heightQuerydb = await promiseWithTimeout(queryDb.getBlockHeight(), timeout);
-        if (!heightQuerydb) {
-          logger.error(errorMsg);
-          dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
-          return;
-        }
+
+        Debug(NS)('step 3: heightQuerydb %s', heightQuerydb);
+
+        // if (heightQuerydb === null) {
+        //   logger.error(errorMsg);
+        //   dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
+        //   return;
+        // }
       } catch (e) {
         catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
         return;
@@ -259,7 +359,13 @@ export const syncJob = createModel<RootModel>()({
       CURRENT = 'step4';
       errorMsg = 'invalid missingblocks';
       try {
-        missingBlocks = await promiseWithTimeout(queryDb.findMissingBlock(heightFabric), timeout);
+        missingBlocks = await promiseWithTimeout(
+          queryDb.findMissingBlock(heightFabric + 1),
+          timeout
+        );
+
+        Debug(NS)('step 4: missingBlocks %O', missingBlocks);
+
         if (!missingBlocks) {
           logger.error(errorMsg);
           dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
@@ -275,7 +381,13 @@ export const syncJob = createModel<RootModel>()({
        * Step 5: validated
        */
       CURRENT = 'step5';
-      const derivedMissingBlocks = takeRight(range(heightFabric + 1), heightFabric - heightQuerydb);
+      const derivedMissingBlocks = takeRight(
+        range(heightFabric + 1),
+        heightFabric - heightQuerydb + 1
+      );
+
+      Debug(NS)('step 5: derivedMissingBlocks %O', derivedMissingBlocks);
+
       dispatch.syncJob.setValidated([
         isEqual(derivedMissingBlocks, missingBlocks),
         `${CURRENT}:setValidated`,
@@ -304,13 +416,21 @@ export const syncJob = createModel<RootModel>()({
           block = await promiseWithTimeout(fabric.queryBlock(channelName, blocknum), timeout);
 
           if (!block) {
+            notifyMessageCenterWhenError(blocknum);
+
             logger.error(`${errorMsg} at ${blocknum}`);
+
+            Debug(NS)('step 6b: null block is detect. Please explore blocknum %s', blocknum);
+
             dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
             dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
             return;
           }
         } catch (e) {
+          notifyMessageCenterWhenError(blocknum);
+
           dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
+
           catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
           return;
         }
@@ -326,14 +446,20 @@ export const syncJob = createModel<RootModel>()({
           const result = fabric.processBlockEvent(block);
 
           if (!result?.[0] || !result?.[1]) {
+            notifyMessageCenterWhenError(blocknum);
+
             logger.error(`${errorMsg} at ${blocknum}`);
+
             dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
             dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
             return;
           }
           [processedBlock, txArray] = result;
         } catch (e) {
+          notifyMessageCenterWhenError(blocknum);
+
           dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
+
           catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
           return;
         }
@@ -345,19 +471,24 @@ export const syncJob = createModel<RootModel>()({
         CURRENT = 'step6d';
         errorMsg = 'fail to insert block';
         try {
-          const result = await promiseWithTimeout(
-            queryDb.insertBlock(new Blocks(processedBlock)),
-            timeout
-          );
+          const data = new Blocks();
+          data.setData(processedBlock);
+          const result = await promiseWithTimeout(queryDb.insertBlock(data), timeout);
 
           if (!result) {
+            notifyMessageCenterWhenError(blocknum);
+
             logger.error(`${errorMsg} at ${blocknum}`);
+
             dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
             dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
             return;
           }
         } catch (e) {
+          notifyMessageCenterWhenError(blocknum);
+
           dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
+
           catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
           return;
         }
@@ -369,18 +500,26 @@ export const syncJob = createModel<RootModel>()({
           CURRENT = 'step6e';
           errorMsg = 'fail to insert tx';
           try {
-            txInserted = await promiseWithTimeout(
-              queryDb.insertTransaction(new Transactions(inputTransaction)),
-              timeout
-            );
+            const data = new Transactions();
+
+            data.setData(inputTransaction);
+
+            txInserted = await promiseWithTimeout(queryDb.insertTransaction(data), timeout);
+
             if (!txInserted) {
+              notifyMessageCenterWhenError(blocknum);
+
               logger.error(`${errorMsg} at ${blocknum}`);
+
               dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
               dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
               return;
             }
           } catch (e) {
+            notifyMessageCenterWhenError(blocknum);
+
             dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
+
             catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
             return;
           }
@@ -395,10 +534,15 @@ export const syncJob = createModel<RootModel>()({
             if (inputCommit) {
               dispatch.syncJob.setBlockHasCommit([blocknum, `${CURRENT}:setBlockHasCommit`]);
 
-              const result = await queryDb.insertCommit(new Commit(inputCommit));
+              const data = new Commit();
+              data.setData(inputCommit);
+              const result = await queryDb.insertCommit(data);
 
               if (!result) {
+                notifyMessageCenterWhenError(blocknum);
+
                 logger.error(`${errorMsg} at ${blocknum}`);
+
                 dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
                 dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
                 return;
@@ -406,16 +550,77 @@ export const syncJob = createModel<RootModel>()({
             } else
               dispatch.syncJob.setBlockHasNoCommit([blocknum, `${CURRENT}:setBlockHasNoCommit`]);
           } catch (e) {
+            notifyMessageCenterWhenError(blocknum);
+
             dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
+
+            catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
+            return;
+          }
+
+          /**
+           * step 6g: update KeyValue table InsertedBlock
+           */
+          CURRENT = 'step6g';
+          errorMsg = 'fail to update KeyValue table';
+          try {
+            const result = await promiseWithTimeout(
+              queryDb.updateInsertedBlockKeyValue(blocknum),
+              timeout
+            );
+
+            if (!result) {
+              notifyMessageCenterWhenError(blocknum);
+
+              logger.error(`${errorMsg} at ${blocknum}`);
+
+              dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
+              dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
+              return;
+            }
+          } catch (e) {
+            notifyMessageCenterWhenError(blocknum);
+
+            dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
+
+            catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
+            return;
+          }
+
+          /**
+           * step 6h: update verified block
+           */
+          CURRENT = 'step6h';
+          errorMsg = 'fail to verify block';
+          try {
+            const result = await promiseWithTimeout(
+              queryDb.updateVerified(blocknum, true),
+              timeout
+            );
+
+            if (!result) {
+              notifyMessageCenterWhenError(blocknum);
+
+              logger.error(`${errorMsg} at ${blocknum}`);
+
+              dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
+              dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
+              return;
+            }
+          } catch (e) {
+            notifyMessageCenterWhenError(blocknum);
+
+            dispatch.syncJob.setFailed([blocknum, `${CURRENT}:setFailed`]);
+
             catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
             return;
           }
         }
 
         /**
-         * step 6g: complete
+         * step 6i: complete
          */
-        CURRENT = 'step6g';
+        CURRENT = 'step6i';
         dispatch.syncJob.setCompleted([blocknum, `${CURRENT}:setCompleted`]);
 
         queued = tail(queued);

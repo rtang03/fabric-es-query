@@ -1,270 +1,167 @@
 require('dotenv').config({ path: 'src/sync/__tests__/.env.sync' });
-import { processBlockEvent } from '../../fabric';
-import { logger, waitSecond } from '../../utils';
-import { dispatcher, type TAction } from '../dispatcher';
-import { block7, block8, block9, block10 } from './__utils__';
+import fs from 'fs';
+import path from 'path';
+import util from 'util';
+import yaml from 'js-yaml';
+import rimraf from 'rimraf';
+import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
+import { createFabricGateway } from '../../fabric';
+import { createMessageCenter } from '../../message';
+import { createQueryDb } from '../../querydb';
+import { Blocks, Commit, KeyValue, Transactions } from '../../querydb/entities';
+import type {
+  Synchronizer,
+  MessageCenter,
+  ConnectionProfile,
+  FabricGateway,
+  QueryDb,
+} from '../../types';
+import { isConnectionProfile, logger, waitSecond } from '../../utils';
+import { createSynchronizer } from '../createSynchronizer';
 
-const option: TAction['payload']['option'] = { logger, timeout: 5000 };
+/**
+ * Running:
+ * 1. cd && ./run.sh
+ * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.explorer.yaml -f compose.ot.yaml up -d --no-recreate
+ */
+let messageCenter: MessageCenter;
+let synchronizer: Synchronizer;
+let fabric: FabricGateway;
+let profile: ConnectionProfile;
+let queryDb: QueryDb;
+let defaultConnection: Connection;
+let testConnection: Promise<Connection>;
+let testConnectionOptions: ConnectionOptions;
 
-const fabric = {
-  queryChannelHeight: jest.fn(),
-  queryBlock: jest.fn(),
-  processBlockEvent: jest.fn(),
+const schema = 'synctest';
+const connectionOptions: ConnectionOptions = {
+  name: 'default',
+  type: 'postgres' as any,
+  host: process.env.QUERYDB_HOST,
+  port: parseInt(process.env.QUERYDB_PORT, 10),
+  username: process.env.QUERYDB_USERNAME,
+  password: process.env.QUERYDB_PASSWD,
+  database: process.env.QUERYDB_DATABASE,
+  logging: true,
+  synchronize: false,
+  dropSchema: false,
+  entities: [Blocks, Transactions, Commit, KeyValue],
+  connectTimeoutMS: 10000,
 };
-const queryDb = {
-  getBlockHeight: jest.fn(),
-  findMissingBlock: jest.fn(),
-  insertBlock: jest.fn(),
-  insertCommit: jest.fn(),
-  insertTransaction: jest.fn(),
-};
-const SYNC_START = { type: 'syncJob/syncStart' };
 
 beforeAll(async () => {
-  // must be bigger than t1 test, i.e. timeout = 1000
-  fabric.queryChannelHeight.mockImplementation(async () => waitSecond(2).then(() => 10));
-  fabric.queryBlock.mockImplementation(async (channelName, blockNum) =>
-    waitSecond(1).then(
-      () =>
-        ({
-          7: block7,
-          8: block8,
-          9: block9,
-          10: block10,
-        }[blockNum])
-    )
-  );
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  fabric.processBlockEvent.mockImplementation((block) => processBlockEvent(block, logger));
+  messageCenter = createMessageCenter({ logger, persist: false });
+  // the default message subscription is using winston.logger, and data/error is intentionally removed.
+  // below subscription will show both data and error for debugging purpose
+  messageCenter.subscribe({
+    next: (m) => console.log(util.format('📨 message received: %j', m)),
+    error: (e) => console.error(util.format('❌ message error: %j', e)),
+    complete: () => console.log('subscription completed'),
+  });
 
-  queryDb.getBlockHeight.mockImplementation(async () => waitSecond(1).then(() => 6));
-  queryDb.findMissingBlock.mockImplementation(async () => waitSecond(1).then(() => [7, 8, 9, 10]));
-  queryDb.insertBlock.mockImplementation(async (b) => waitSecond(1).then(() => b));
-  queryDb.insertCommit.mockImplementation(async (c) => waitSecond(1).then(() => c));
-  queryDb.insertTransaction.mockImplementation(async (tx) => waitSecond(1).then(() => tx));
+  // removing pre-existing wallet
+  try {
+    await new Promise((resolve, reject) =>
+      rimraf(path.join(__dirname, '__wallet__'), (err) => (err ? reject(err) : resolve(true)))
+    );
+  } catch {
+    console.error('fail to remove wallet');
+    process.exit(1);
+  }
 
-  option['fabric'] = fabric;
-  option['queryDb'] = queryDb;
+  // Loading connection profile
+  try {
+    const pathToConnectionProfile = path.join(process.cwd(), process.env.CONNECTION_PROFILE);
+    const file = fs.readFileSync(pathToConnectionProfile);
+    const loadedFile: unknown = yaml.load(file);
+    if (isConnectionProfile(loadedFile)) profile = loadedFile;
+    else {
+      console.error('invalid connection profile');
+      process.exit(1);
+    }
+  } catch {
+    console.error('fail to read connection profile');
+    process.exit(1);
+  }
+
+  // FabricGateway
+  try {
+    fabric = createFabricGateway(profile, {
+      adminId: process.env.ADMIN_ID,
+      adminSecret: process.env.ADMIN_SECRET,
+      walletPath: process.env.WALLET,
+      logger,
+      messageCenter,
+    });
+  } catch {
+    console.error('fail to createFabricGateway');
+    process.exit(1);
+  }
+
+  // QueryDb
+  try {
+    // use different schema for testing
+    defaultConnection = await createConnection(connectionOptions);
+    await defaultConnection.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
+    testConnectionOptions = {
+      ...connectionOptions,
+      ...{ name: schema, schema, synchronize: true, dropSchema: true },
+    };
+    testConnection = createConnection(testConnectionOptions);
+
+    queryDb = createQueryDb({
+      logger,
+      connection: testConnection,
+      nonDefaultSchema: schema,
+      messageCenter,
+    });
+  } catch (e) {
+    logger.error('fail to createQueryDb: ', e);
+    process.exit(1);
+  }
+
+  // Synchronizer
+  try {
+    synchronizer = createSynchronizer(30, {
+      persist: false,
+      initialTimeoutMs: 1500,
+      initialShowStateChanges: true,
+      dev: false,
+      fabric,
+      queryDb,
+      logger,
+    });
+  } catch {
+    console.error('fail to createFabricGateway');
+    process.exit(1);
+  }
 });
 
 afterAll(async () => {
-  await waitSecond(5); // it should be bigger than the PromiseWithTimeout
+  await waitSecond(3);
+  messageCenter.getMessagesObs().unsubscribe();
+  await defaultConnection.close();
+  await queryDb.disconnect();
+  await waitSecond(1);
 });
 
-describe('sync tests -- failure tests', () => {
-  it('t1 - syncStart: throw timeout error', async () =>
-    dispatcher(SYNC_START, { ...option, timeout: 1000, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-        expect(error.message).toEqual('timeout');
-      }
-    ));
+describe('sync tests', () => {
+  it('initialize fabric gateway', async () => {
+    await fabric.initialize();
 
-  it('t2.1 - syncStart: fail to query channel height / fabric - reject', async () => {
-    fabric.queryChannelHeight.mockImplementationOnce(async () =>
-      waitSecond(1).then(() => Promise.reject())
-    );
+    const { isCaAdminEnrolled, isCaAdminInWallet } = fabric.getInfo();
 
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
+    expect(isCaAdminEnrolled).toBeTruthy();
+    expect(isCaAdminInWallet).toBeTruthy();
   });
 
-  it('t2.2 - syncStart: fail to query channel height / fabric - null', async () => {
-    fabric.queryChannelHeight.mockImplementationOnce(async () => waitSecond(1).then(() => null));
+  it('connect queryDb', async () =>
+    queryDb.connect().then((result) => expect(result instanceof Connection).toBeTruthy()));
 
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
+  it('isBackendsReady', async () =>
+    synchronizer.isBackendsReady().then((result) => expect(result).toBeTruthy()));
+
+  it('sync start', async () => {
+    await synchronizer.start(1);
   });
-
-  it('t3.1 - syncStart: fail to query channel height / query - reject', async () => {
-    queryDb.getBlockHeight.mockImplementationOnce(async () =>
-      waitSecond(1).then(() => Promise.reject())
-    );
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t3.2 - syncStart: fail to query channel height / query - null', async () => {
-    queryDb.getBlockHeight.mockImplementationOnce(async () => waitSecond(1).then(() => null));
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t4.1 - syncStart: fail to findMissingBlocks / query - reject', async () => {
-    queryDb.findMissingBlock.mockImplementationOnce(async () =>
-      waitSecond(1).then(() => Promise.reject())
-    );
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t4.2 - syncStart: fail to findMissingBlocks / query - null', async () => {
-    queryDb.findMissingBlock.mockImplementationOnce(async () => waitSecond(1).then(() => null));
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t6b.1 - syncStart: fail to queryBlock in fabric - reject', async () => {
-    fabric.queryBlock.mockImplementationOnce(async () =>
-      waitSecond(1).then(() => Promise.reject())
-    );
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t6b.2 - syncStart: fail to queryBlock in fabric - null', async () => {
-    fabric.queryBlock.mockImplementationOnce(async () => waitSecond(1).then(() => null));
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t6c.1 - syncStart: fail to processBlockEvent - reject', async () => {
-    fabric.queryBlock.mockImplementationOnce(async () =>
-      waitSecond(1).then(() => Promise.reject())
-    );
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t6c.2 - syncStart: fail to processBlockEvent - null', async () => {
-    fabric.queryBlock.mockImplementationOnce(async () => waitSecond(1).then(() => null));
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t6d.1 - syncStart: fail to insert block in querydb - reject', async () => {
-    queryDb.insertBlock.mockImplementationOnce(async () =>
-      waitSecond(1).then(() => Promise.reject())
-    );
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t6d.2 - syncStart: fail to insert block in querydb - null', async () => {
-    queryDb.insertBlock.mockImplementationOnce(async () => waitSecond(1).then(() => null));
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t6e.1 - syncStart: fail to insert tx in querydb - reject', async () => {
-    queryDb.insertTransaction.mockImplementationOnce(async () =>
-      waitSecond(1).then(() => Promise.reject())
-    );
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t6e.2 - syncStart: fail to insert tx in querydb - null', async () => {
-    queryDb.insertTransaction.mockImplementationOnce(async () => waitSecond(1).then(() => null));
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t6f.1 - syncStart: fail to insert commit in querydb - reject', async () => {
-    queryDb.insertCommit.mockImplementationOnce(async () =>
-      waitSecond(1).then(() => Promise.reject())
-    );
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t6f.2 - syncStart: fail to insert commit in querydb - null', async () => {
-    queryDb.insertCommit.mockImplementationOnce(async () => waitSecond(1).then(() => null));
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-});
-
-describe('sync tests -- good tests', () => {
-  it('full test - syncStart', async () =>
-    dispatcher(SYNC_START, { ...option, showStateChanges: true }).then(({ status }) =>
-      expect(status).toEqual('ok')
-    ));
-});
-
-describe('others', () => {
-  it('syncStart will throw, when there is running job', async () =>
-    dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch((error) => {
-      expect(error).toBeInstanceOf(Error);
-      expect(error.message).toEqual('fail to dispatch');
-    }));
 });

@@ -19,8 +19,10 @@ import {
 } from '../../utils';
 import { createFabricGateway } from '../createFabricGateway';
 
-/*
-./dev-net/run.sh
+/**
+ * Running:
+ * 1. cd && ./run.sh
+ * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.explorer.yaml -f compose.ot.yaml up -d --no-recreate
  */
 let messageCenter: MessageCenter;
 let fg: FabricGateway;
@@ -60,6 +62,7 @@ beforeAll(async () => {
     process.exit(1);
   }
 
+  // Loading connection profile
   try {
     const pathToConnectionProfile = path.join(process.cwd(), process.env.CONNECTION_PROFILE);
     const file = fs.readFileSync(pathToConnectionProfile);
@@ -81,6 +84,7 @@ beforeAll(async () => {
       walletPath: process.env.WALLET,
       logger,
       meters: metrics.meters,
+      messageCenter,
     });
   } catch {
     console.error('fail to createFabricGateway');

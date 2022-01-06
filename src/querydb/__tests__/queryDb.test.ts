@@ -1,3 +1,5 @@
+import { KEY } from '../constants';
+
 require('dotenv').config({ path: 'src/querydb/__tests__/.env.querydb' });
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
@@ -23,6 +25,11 @@ import { b0, b1, b10, b2, b3, b4, b5, b6, b7, b8, b9 } from './__utils__/data';
 import { t0, t1, t10, t2, t3, t4, t5, t6, t7, t8, t9 } from './__utils__/data';
 import { c1, c2 } from './__utils__/data';
 
+/**
+ * Running:
+ * 1. cd && ./run.sh
+ * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.explorer.yaml -f compose.ot.yaml up -d --no-recreate
+ */
 let messageCenter: MessageCenter;
 let queryDb: QueryDb;
 let defaultConnection: Connection;
@@ -35,6 +42,7 @@ let metrics: {
 };
 
 const schema = 'querydbtest';
+const noResult = { total: 0, items: [], hasMore: false, cursor: 0 };
 const connectionOptions: ConnectionOptions = {
   name: 'default',
   type: 'postgres' as any,
@@ -49,8 +57,6 @@ const connectionOptions: ConnectionOptions = {
   entities: [Blocks, Transactions, Commit, KeyValue],
   connectTimeoutMS: 10000,
 };
-
-const noResult = { total: 0, items: [], hasMore: false, cursor: 0 };
 
 beforeAll(async () => {
   messageCenter = createMessageCenter({ logger, persist: false });
@@ -115,8 +121,11 @@ describe('query-db tests', () => {
     queryDb.getBlockHeight().then((result) => expect(result).toBeNull()));
 
   [b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10].forEach((item) =>
-    it(`insertBlock - ${item.blocknum}`, async () =>
-      queryDb.insertBlock(new Blocks(item)).then((result) => expect(isBlocks(result)).toBeTruthy()))
+    it(`insertBlock - ${item.blocknum}`, async () => {
+      const block = new Blocks();
+      block.setData(item);
+      return queryDb.insertBlock(block).then((result) => expect(isBlocks(result)).toBeTruthy());
+    })
   );
 
   it('getBlockHeight #2', async () =>
@@ -126,13 +135,30 @@ describe('query-db tests', () => {
 
   [t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10].forEach((item) =>
     it(`insertTransaction - ${item.blockid}`, async () => {
-      const tx = new Transactions(item);
+      const tx = new Transactions();
+      tx.setData(item);
       const result = await queryDb.insertTransaction(tx);
       expect(isTransactions(result)).toBeTruthy();
     })
   );
 
   it('getTxCount', async () => queryDb.getTxCount().then((result) => expect(result).toEqual(11)));
+
+  it('findUnverified', async () =>
+    queryDb.findUnverified().then((result) => expect(result).toEqual(range(11))));
+
+  range(11).forEach((blocknum) =>
+    it('updateVerified', async () =>
+      queryDb.updateVerified(blocknum, true).then((result) => expect(result).toBeTruthy()))
+  );
+
+  // after insertTransaction, update the KV table
+  range(11).forEach((blocknum) =>
+    it('updateInsertedBlockKeyValue', async () =>
+      queryDb
+        .updateInsertedBlockKeyValue(blocknum)
+        .then((result) => expect(result?.key).toEqual(KEY.INSERTED_BLOCK)))
+  );
 
   it('findMissingBlock, at = 5, returning []', async () =>
     queryDb.findMissingBlock(5).then((result) => expect(result).toEqual([])));
@@ -201,72 +227,78 @@ describe('query-db tests', () => {
     }));
 
   [c1, c2].forEach((data) =>
-    it(`insert commit - ${data.commitId}`, async () =>
-      queryDb
-        .insertCommit(new Commit(data))
-        .then((result) => expect(isCommit(result)).toBeTruthy()))
+    it(`insert commit - ${data.commitId}`, async () => {
+      const commit = new Commit();
+      commit.setData(data);
+      return queryDb.insertCommit(commit).then((result) => expect(isCommit(result)).toBeTruthy());
+    })
   );
 
-  it('findCommit: all', async () =>
-    queryDb.findCommit({ dev: true }).then(({ items, total, hasMore, cursor }) => {
-      expect(hasMore).toBeFalsy();
-      expect(total).toEqual(2);
-      expect(cursor).toEqual(2);
-      items.forEach((item) => expect(isCommit(item)).toBeTruthy());
-    }));
+  // it('findUnverified', async () =>
+  //   queryDb.findUnverified().then((result) => {
+  //     console.log(result);
+  //   }));
 
-  it('findCommit: first one', async () =>
-    queryDb
-      .findCommit({ dev: true, take: 1, skip: 0 })
-      .then(({ items, total, hasMore, cursor }) => {
-        expect(hasMore).toBeTruthy();
-        expect(total).toEqual(2);
-        expect(cursor).toEqual(1);
-        items.forEach((item) => expect(isCommit(item)).toBeTruthy());
-      }));
+  // it('findCommit: all', async () =>
+  //   queryDb.findCommit({ dev: true }).then(({ items, total, hasMore, cursor }) => {
+  //     expect(hasMore).toBeFalsy();
+  //     expect(total).toEqual(2);
+  //     expect(cursor).toEqual(2);
+  //     items.forEach((item) => expect(isCommit(item)).toBeTruthy());
+  //   }));
+  //
+  // it('findCommit: first one', async () =>
+  //   queryDb
+  //     .findCommit({ dev: true, take: 1, skip: 0 })
+  //     .then(({ items, total, hasMore, cursor }) => {
+  //       expect(hasMore).toBeTruthy();
+  //       expect(total).toEqual(2);
+  //       expect(cursor).toEqual(1);
+  //       items.forEach((item) => expect(isCommit(item)).toBeTruthy());
+  //     }));
 
-  it('fail to findCommit: by entityName', async () =>
-    queryDb
-      .findCommit({ entityName: 'abcdef' })
-      .then((result) => expect(result).toEqual(noResult)));
+  // it('fail to findCommit: by entityName', async () =>
+  //   queryDb
+  //     .findCommit({ entityName: 'abcdef' })
+  //     .then((result) => expect(result).toEqual(noResult)));
+  //
+  // it('findCommit: by entityName', async () =>
+  //   queryDb.findCommit({ entityName: 'dev_entity' }).then(({ items, total, hasMore, cursor }) => {
+  //     expect(hasMore).toBeFalsy();
+  //     expect(total).toEqual(2);
+  //     expect(cursor).toEqual(2);
+  //     items.forEach((item) => expect(isCommit(item)).toBeTruthy());
+  //   }));
 
-  it('findCommit: by entityName', async () =>
-    queryDb.findCommit({ entityName: 'dev_entity' }).then(({ items, total, hasMore, cursor }) => {
-      expect(hasMore).toBeFalsy();
-      expect(total).toEqual(2);
-      expect(cursor).toEqual(2);
-      items.forEach((item) => expect(isCommit(item)).toBeTruthy());
-    }));
+  // it('fail to findCommit: by entityName, entityId', async () =>
+  //   queryDb
+  //     .findCommit({ entityName: 'dev_entity', entityId: 'abcdef' })
+  //     .then((result) => expect(result).toEqual(noResult)));
 
-  it('fail to findCommit: by entityName, entityId', async () =>
-    queryDb
-      .findCommit({ entityName: 'dev_entity', entityId: 'abcdef' })
-      .then((result) => expect(result).toEqual(noResult)));
+  // it('findCommit: by entityName, entityId', async () =>
+  //   queryDb
+  //     .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123' })
+  //     .then(({ items, hasMore, cursor, total }) => {
+  //       expect(hasMore).toBeFalsy();
+  //       expect(total).toEqual(2);
+  //       expect(cursor).toEqual(2);
+  //       items.forEach((item) => expect(isCommit(item)).toBeTruthy());
+  //     }));
 
-  it('findCommit: by entityName, entityId', async () =>
-    queryDb
-      .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123' })
-      .then(({ items, hasMore, cursor, total }) => {
-        expect(hasMore).toBeFalsy();
-        expect(total).toEqual(2);
-        expect(cursor).toEqual(2);
-        items.forEach((item) => expect(isCommit(item)).toBeTruthy());
-      }));
+  // it('fail to findCommit: by entityName, entityId, commitId', async () =>
+  //   queryDb
+  //     .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123', commitId: '1000' })
+  //     .then((result) => expect(result).toEqual(noResult)));
 
-  it('fail to findCommit: by entityName, entityId, commitId', async () =>
-    queryDb
-      .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123', commitId: '1000' })
-      .then((result) => expect(result).toEqual(noResult)));
-
-  it('findCommit: by entityName, entityId, commitId', async () =>
-    queryDb
-      .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123', commitId: '1' })
-      .then(({ items, total, hasMore, cursor }) => {
-        expect(hasMore).toBeFalsy();
-        expect(total).toEqual(1);
-        expect(cursor).toEqual(1);
-        items.forEach((item) => expect(isCommit(item)).toBeTruthy());
-      }));
+  // it('findCommit: by entityName, entityId, commitId', async () =>
+  //   queryDb
+  //     .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123', commitId: '1' })
+  //     .then(({ items, total, hasMore, cursor }) => {
+  //       expect(hasMore).toBeFalsy();
+  //       expect(total).toEqual(1);
+  //       expect(cursor).toEqual(1);
+  //       items.forEach((item) => expect(isCommit(item)).toBeTruthy());
+  //     }));
 
   // it('validate with metric server', async () => {
   //   await waitForSecond(2);

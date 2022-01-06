@@ -19,7 +19,7 @@ import {
 } from 'fabric-network';
 import fabprotos from 'fabric-protos';
 import winston from 'winston';
-import { MSG } from '../message';
+import { KIND, MSG } from '../message';
 import type { ConnectionProfile, FabricGateway, MessageCenter } from '../types';
 import { type Meters } from '../utils';
 import { processBlockEvent } from './processBlockEvent';
@@ -378,7 +378,7 @@ export const createFabricGateway: (
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         const height = resultJson?.height?.low && parseInt(resultJson.height.low, 10) - 1;
 
-        mCenter?.notify({ kind: 'info', title: MSG.CHANNEL_HEIGHT, data: height });
+        mCenter?.notify({ kind: KIND.INFO, title: MSG.CHANNEL_HEIGHT, data: height });
 
         Debug(`${NS}:${me}`)('result, %O', resultJson);
 
@@ -409,7 +409,7 @@ export const createFabricGateway: (
             return (
               !(event.blockNumber.low === 0 && event.blockNumber.high === 0) &&
               mCenter?.notify<BlockEvent>({
-                kind: 'system',
+                kind: KIND.SYSTEM,
                 title: MSG.BLOCK_ARRIVAL,
                 desc: `blocknum ${event.blockNumber} arrives`,
                 data: event,

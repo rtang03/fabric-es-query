@@ -9,7 +9,20 @@ export const MSG = {
   INSERT_COMMIT_FAIL: 'insert commit fail',
   PARSE_WRITESET_FAIL: 'fail to parse write_set',
   UPDATE_KV_INSERTEDBLOCK_FAIL: 'fail to update key-value: insertedblock',
+  UNVERIFIED_BLOCK_FOUND: 'unverified block found',
+  UNVERIFIED_BLOCK_DELTED: 'unverified block deleted',
   // notify by fabricGateway
   CHANNEL_HEIGHT: 'latest channel height',
   BLOCK_ARRIVAL: 'block arrives',
+  // notify by synchronizer
+  SYNC_START: 'sync start',
+  SYNC_STOP: 'sync stop',
+  SYNCJOB_OK: 'sync job ok',
+  SYNCJOB_FAIL: 'sync job fail',
+};
+
+export const KIND = {
+  INFO: 'info',
+  ERROR: 'error',
+  SYSTEM: 'system',
 };

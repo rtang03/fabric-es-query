@@ -1,7 +1,8 @@
 import util from 'util';
+import Debug from 'debug';
 import { omit, isEqual } from 'lodash';
 import winston from 'winston';
-import type { FabricGateway, QueryDb } from '../types';
+import type { FabricGateway, MessageCenter, QueryDb } from '../types';
 import { generateToken } from '../utils';
 import { store } from './store';
 
@@ -15,18 +16,17 @@ export type TAction = {
       logger: winston.Logger;
       fabric?: Partial<FabricGateway>;
       queryDb?: Partial<QueryDb>;
+      messageCenter?: MessageCenter;
       timeout?: number;
     };
   };
 };
 
-export type TActionOption = {
-  alias?: string;
-  logger: winston.Logger;
-  timeout?: number;
+export type TActionOption = TAction['payload']['option'] & {
   showStateChanges?: boolean;
 };
 
+const NS = 'sync:dispatcher';
 const removeEmptyField = (syncJob: any) =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   Object.entries(syncJob)
@@ -47,11 +47,17 @@ export const dispatcher: (
     }
 
     const tid = generateToken();
+
     logger?.info(`action dispatched: ${action.type} ${tid}`);
 
     const unsubscribe = store.subscribe(() => {
       const { syncJob } = store.getState();
       const { tx_id, status, data, error } = syncJob;
+
+      Debug(NS)('tx_id: %s', tx_id);
+      Debug(NS)('status: %s', status);
+      data && Debug(NS)('data, %O', data);
+      error && Debug(NS)('error, %O', error);
 
       showStateChanges &&
         logger.info(
@@ -72,6 +78,7 @@ export const dispatcher: (
         unsubscribe();
 
         logger.info(`action rejected: ${action.type} ${tid}`);
+
         reject({ status: 'error', error });
       }
     });

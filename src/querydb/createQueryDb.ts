@@ -1,10 +1,10 @@
 import { type Tracer } from '@opentelemetry/api';
 import Debug from 'debug';
-import { flatten, range, includes } from 'lodash';
+import { flatten, range, includes, isEqual } from 'lodash';
 import { Connection, Not, getManager, Repository } from 'typeorm';
 import winston from 'winston';
 import WebSocket from 'ws';
-import { MSG } from '../message';
+import { KIND, MSG } from '../message';
 import type { MessageCenter, PaginatedCommit, QueryDb } from '../types';
 import { CODE, isBlocks, isCommit, isTransactions, isWriteSet, type Meters } from '../utils';
 import { KEY } from './constants';
@@ -51,6 +51,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
       logger.error(`fail to parseWriteSet(), txid: ${txhash}`);
       return null;
     }
+
     try {
       if (isWriteSet(ws)) {
         const { key, value, is_delete } = ws.filter(
@@ -61,18 +62,18 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
         const valueJson: unknown = JSON.parse(value);
 
-        valueJson['txhash'] = tx.txhash;
-        valueJson['blocknum'] = tx.blockid;
-
-        if (isCommit(valueJson) && !is_delete) return valueJson;
-        // if (isCommit(valueJson) && !is_delete) return omit(valueJson, 'key');
+        if (isCommit(valueJson) && !is_delete) {
+          valueJson['txhash'] = tx.txhash;
+          valueJson['blocknum'] = tx.blockid;
+          return valueJson;
+        }
       }
-      logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid}`);
-      logger.error(`write_set: ${write_set}`);
+      logger.info(`write_set is NOT commit, txid: ${txhash}, blockid: ${blockid}`);
+      Debug(`${NS}:parseWriteSet`)(`write_set: ${write_set}`);
       return null;
     } catch (e) {
-      logger.error(`invalid write_set, , txid: ${txhash}, blockid: ${blockid} : `, e);
-      logger.error(`write_set: ${write_set}`);
+      logger.error(`invalid write_set, txid: ${txhash}, blockid: ${blockid} : `, e);
+      Debug(`${NS}:parseWriteSet`)('write_set: %O', write_set);
       return null;
     }
   };
@@ -85,7 +86,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         conn = await connection;
         logger.info(`database connected`);
 
-        mCenter?.notify({ title: MSG.DB_CONNECTED });
+        mCenter?.notify({ kind: KIND.SYSTEM, title: MSG.DB_CONNECTED });
 
         meters?.queryDbConnected.add(1);
 
@@ -122,11 +123,12 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         // NOTE: psql-only
         const result = await getManager().query(`SELECT MAX (blocknum) FROM ${schema}.blocks`);
         let blockHeight: number = result?.[0]?.max;
-        if (!(blockHeight === undefined || blockHeight === null)) blockHeight = blockHeight + 1;
 
         Debug(`${NS}:${me}`)(`result: %O`, blockHeight);
 
-        return blockHeight;
+        return !(blockHeight === undefined || blockHeight === null)
+          ? (blockHeight = blockHeight + 1)
+          : null;
       } catch (e) {
         logger.error(`fail to ${me} :`, e);
         return null;
@@ -154,7 +156,6 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
       const save = true;
       let result;
 
-      // step 1: insert block
       try {
         if (!isBlocks(b)) {
           logger.error('unexpected error: invalid block format');
@@ -163,18 +164,31 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
         result = await blockRepository.save(b);
 
-        mCenter?.notify({ title: MSG.INSERT_BLOCK_OK, desc, broadcast, save, data: b.blocknum });
+        mCenter?.notify({
+          kind: KIND.SYSTEM,
+          title: MSG.INSERT_BLOCK_OK,
+          desc,
+          broadcast,
+          save,
+          data: b.blocknum,
+        });
 
         Debug(`${NS}:${me}`)('result: %O', result);
+
+        return result;
       } catch (error) {
         logger.error(`fail to ${me} : `, error);
         const title = MSG.INSERT_BLOCK_FAIL;
 
-        mCenter?.notify({ kind: 'error', title, desc, error, broadcast, save });
+        mCenter?.notify({ kind: KIND.ERROR, title, desc, error, broadcast, save });
         return null;
       }
-
-      // step 2: update KeyValue "INSERTED_BLOCK"
+    },
+    /* UPDATE KEY VALUE STORE - INSERTED BLOCK */
+    updateInsertedBlockKeyValue: async (blocknum) => {
+      const me = 'updateInsertedBlockKeyValue';
+      const desc = `blocknum: ${blocknum}`;
+      const save = true;
       try {
         const insertedBlock = { key: KEY.INSERTED_BLOCK, modified: new Date() };
 
@@ -183,24 +197,25 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
         // append new blocknum
         insertedBlock['value'] = keyvalue?.value
-          ? `${keyvalue.value},${b.blocknum}`
-          : b.blocknum.toString();
+          ? `${keyvalue.value},${blocknum}`
+          : blocknum.toString();
 
-        const updatedResult = await kvRepository.save(insertedBlock);
+        const result = await kvRepository.save(insertedBlock);
 
-        Debug(`${NS}:${me}`)('updating keyvalue: %O', updatedResult);
+        Debug(`${NS}:${me}`)('updating keyvalue: %O', result);
 
-        if (!updatedResult) {
+        if (!result) {
           logger.error('unexpected error in updating key-value: insertedBlock');
 
           const title = MSG.UPDATE_KV_INSERTEDBLOCK_FAIL;
 
-          mCenter.notify({ kind: 'error', title, desc, save, data: b.blocknum });
+          mCenter.notify({ kind: KIND.ERROR, title, desc, save, data: blocknum });
         }
+        return result;
       } catch (e) {
         logger.error(`fail to keyvalue: insertedblock : `, e);
+        return null;
       }
-      return result;
     },
     /* INSERT TX */
     insertTransaction: async (tx) => {
@@ -217,7 +232,14 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
         const result = await txRepository.save(tx);
 
-        mCenter?.notify({ title: MSG.INSERT_TX_OK, desc, broadcast, save, data: tx.txhash });
+        mCenter?.notify({
+          kind: KIND.SYSTEM,
+          title: MSG.INSERT_TX_OK,
+          desc,
+          broadcast,
+          save,
+          data: tx.txhash,
+        });
 
         Debug(`${NS}:${me}`)('result: %O', result);
 
@@ -225,7 +247,14 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
       } catch (error) {
         logger.error(`fail to ${me} : `, error);
 
-        mCenter?.notify({ kind: 'error', title: MSG.INSERT_TX_FAIL, desc, error, broadcast, save });
+        mCenter?.notify({
+          kind: KIND.ERROR,
+          title: MSG.INSERT_TX_FAIL,
+          desc,
+          error,
+          broadcast,
+          save,
+        });
 
         return null;
       }
@@ -245,7 +274,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
         const result = await commitRepository.save(commit);
 
-        mCenter?.notify({ title: MSG.INSERT_COMMIT_OK, desc, broadcast, save });
+        mCenter?.notify({ kind: KIND.SYSTEM, title: MSG.INSERT_COMMIT_OK, desc, broadcast, save });
 
         Debug(`${NS}:${me}`)('result: %O', result);
 
@@ -254,23 +283,22 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         logger.error(`fail to ${me} : `, error);
 
         const title = MSG.INSERT_COMMIT_FAIL;
-        mCenter?.notify({ kind: 'error', title, desc, error, broadcast, save });
+        mCenter?.notify({ kind: KIND.ERROR, title, desc, error, broadcast, save });
 
         return null;
       }
     },
     /* FIND MISSING BLOCK from KV */
-    findMissingBlock: async (maxBlockNum) => {
+    findMissingBlock: async (maxNumberOfBlock) => {
       const me = 'findMissingBlock';
-      const all = range(maxBlockNum);
+      // maxNumberOfBlock = BlockHeight + 1
+      const all = range(maxNumberOfBlock);
 
       try {
         const insertedBlock = await kvRepository.findOne(KEY.INSERTED_BLOCK);
         const blocknumInKVStore = insertedBlock?.value
           ?.split(',')
           .map((item) => parseInt(item, 10));
-
-        Debug(`${NS}:${me}`)('blocknumArray: %O', blocknumInKVStore);
 
         // no existing block found
         if (!blocknumInKVStore || blocknumInKVStore?.length === 0) return all;
@@ -460,7 +488,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
             !parsedResult &&
               mCenter?.notify({
-                kind: 'error',
+                kind: KIND.ERROR,
                 title: MSG.PARSE_WRITESET_FAIL,
                 desc: `txhash: ${tx.txhash}; blocknum: ${tx.blockid}`,
                 error: tx.write_set,
@@ -488,6 +516,106 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
         logger.info(`${me} done: total: ${total}, cursor: ${cursor}`);
 
         return result;
+      } catch (e) {
+        logger.error(`fail to ${me} : `, e);
+        return null;
+      }
+    },
+    /* FIND UNVERIFIED BLOCK */
+    findUnverified: async () => {
+      const me = 'findUnverified';
+      try {
+        const blocks = await blockRepository.find({
+          where: { verified: false },
+          order: { blocknum: 'ASC' },
+        });
+
+        if (!blocks) {
+          logger.error(`fail to ${me}`);
+          return null;
+        }
+
+        const unverified = blocks?.map((b) => b?.blocknum);
+
+        Debug(`${NS}:${me}`)('blocknum: %s', unverified.toString());
+
+        ~~unverified.length &&
+          mCenter?.notify({
+            kind: KIND.SYSTEM,
+            title: MSG.UNVERIFIED_BLOCK_FOUND,
+            desc: unverified.toString(),
+            data: unverified,
+            broadcast: true,
+            save: false,
+          });
+
+        return unverified;
+      } catch (e) {
+        logger.error(`fail to ${me} : `, e);
+        return null;
+      }
+    },
+    /* UPDATE VERIFIED */
+    updateVerified: async (blocknum, verified) => {
+      const me = 'updateVerified';
+      try {
+        const result = await blockRepository.update({ blocknum }, { verified });
+
+        if (!result) {
+          logger.error(`fail to ${me}`);
+          return null;
+        }
+        return true;
+      } catch (e) {
+        logger.error(`fail to ${me} : `, e);
+        return null;
+      }
+    },
+    /* REMOVE UNVERIFIED BLOCK/TX/COMMIT  */
+    removeUnverifiedBlock: async () => {
+      const me = 'removeUnverifiedBlock';
+      try {
+        // step 1: check
+        const blocks = await blockRepository.find({
+          where: { verified: false },
+          order: { blocknum: 'ASC' },
+        });
+
+        if (!blocks) {
+          logger.error(`fail to ${me}`);
+          return null;
+        }
+
+        if (isEqual(blocks, [])) {
+          logger.info('no unverified blocks found');
+          return false;
+        }
+        const toBeDeleted = blocks.map((b) => b?.blocknum);
+
+        logger.info('delete block: ', toBeDeleted.toString());
+
+        // step 2: delete block
+        let result = await blockRepository.delete(toBeDeleted);
+
+        Debug(`${NS}:${me}`)('delete block result %O', result);
+
+        // step 3: delete tx
+        for await (const blockid of toBeDeleted) {
+          result = await txRepository.delete({ blockid });
+
+          logger.info('delete tx: ', result.affected);
+        }
+
+        // step 4: delete commit
+        for await (const blocknum of toBeDeleted) {
+          result = await commitRepository.delete({ blocknum });
+
+          logger.info('delete commit: ', result.affected);
+        }
+
+        mCenter?.notify({ kind: KIND.SYSTEM, title: MSG.UNVERIFIED_BLOCK_DELTED, data: result });
+
+        return true;
       } catch (e) {
         logger.error(`fail to ${me} : `, e);
         return null;

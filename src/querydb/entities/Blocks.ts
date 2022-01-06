@@ -1,4 +1,4 @@
-import { Column, PrimaryColumn, Entity } from 'typeorm';
+import { Column, PrimaryColumn, Entity, Index } from 'typeorm';
 
 @Entity('blocks')
 export class Blocks {
@@ -14,6 +14,7 @@ export class Blocks {
   @Column({ type: 'int', nullable: true })
   txcount: number;
 
+  @Index()
   @Column({ type: 'timestamp', nullable: true })
   createdt: Date;
 
@@ -23,7 +24,11 @@ export class Blocks {
   @Column({ type: 'int', nullable: true })
   blksize: number;
 
-  constructor(data) {
+  @Index()
+  @Column({ type: 'boolean', nullable: false, default: false })
+  verified?: boolean;
+
+  setData?(data) {
     this.blocknum = data.blocknum;
     this.datahash = data.datahash;
     this.prehash = data.prehash;
