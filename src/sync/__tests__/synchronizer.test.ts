@@ -16,7 +16,7 @@ import type {
   FabricGateway,
   QueryDb,
 } from '../../types';
-import { isConnectionProfile, logger, waitSecond } from '../../utils';
+import { CODE, isConnectionProfile, logger, waitSecond } from '../../utils';
 import { createSynchronizer } from '../createSynchronizer';
 
 /**
@@ -162,6 +162,47 @@ describe('sync tests', () => {
     synchronizer.isBackendsReady().then((result) => expect(result).toBeTruthy()));
 
   it('sync start', async () => {
-    await synchronizer.start(1);
+    const result = await synchronizer.start(1);
+
+    if (result) {
+      const blockHeighQuery = await queryDb.getBlockHeight();
+      expect(blockHeighQuery).toEqual(11);
+
+      const blocks = await queryDb.findBlock({
+        skip: 0,
+        take: 11,
+        sort: 'ASC',
+        orderBy: 'blocknum',
+      });
+      expect(blocks.total).toEqual(11);
+      expect(blocks.hasMore).toBeFalsy();
+      expect(blocks.cursor).toEqual(11);
+      expect(blocks.items.filter(({ verified }) => verified).length).toEqual(11);
+
+      const tx = await queryDb.findTxWithCommit({
+        skip: 0,
+        take: 10,
+        sort: 'ASC',
+        orderBy: 'blockid',
+        code: CODE.PUBLIC_COMMIT,
+      });
+
+      expect(tx.total).toEqual(2);
+      expect(tx.hasMore).toBeFalsy();
+      expect(tx.cursor).toEqual(2);
+      expect(tx.items.map(({ blockid }) => blockid)).toEqual([7, 9]);
+
+      const commits = await queryDb.findCommit({
+        skip: 0,
+        take: 10,
+        sort: 'ASC',
+        orderBy: 'commitId',
+        entityName: 'dev_entity'
+      });
+      expect(commits.total).toEqual(2);
+      expect(commits.hasMore).toBeFalsy();
+      expect(commits.cursor).toEqual(2);
+      expect(commits.items.map(({ blocknum }) => blocknum)).toEqual([7, 9]);
+    }
   });
 });

@@ -41,9 +41,6 @@ export class Transactions {
   @Column({ type: 'character varying', length: 255, nullable: true })
   validation_code: string;
 
-  // @Column({ type: 'character varying', nullable: true })
-  // envelope_signature: string;
-
   @Column({ type: 'character varying', nullable: true })
   payload_extension: string;
 
@@ -86,7 +83,6 @@ export class Transactions {
     this.read_set = data.read_set;
     this.write_set = data.write_set;
     this.validation_code = data.validation_code;
-    // this.envelope_signature = data.envelope_signature;
     this.payload_extension = data.payload_extension;
     this.creator_id_bytes = data.creator_id_bytes;
     this.creator_nonce = data.creator_nonce;

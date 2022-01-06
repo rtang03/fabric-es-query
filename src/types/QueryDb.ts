@@ -8,7 +8,7 @@ export type FindPaginatedCommitOption = {
   sort?: 'ASC' | 'DESC';
   orderBy?: keyof Commit;
   id?: string;
-  entityName?: string;
+  entityName: string;
   commitId?: string;
   entityId?: string;
   mspId?: string;

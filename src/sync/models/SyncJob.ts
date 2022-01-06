@@ -321,7 +321,7 @@ export const syncJob = createModel<RootModel>()({
           return;
         }
       } catch (e) {
-        console.log(e);
+        logger.error(e);
         catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
         return;
       }
@@ -342,11 +342,7 @@ export const syncJob = createModel<RootModel>()({
 
         Debug(NS)('step 3: heightQuerydb %s', heightQuerydb);
 
-        // if (heightQuerydb === null) {
-        //   logger.error(errorMsg);
-        //   dispatch.syncJob.failed([new Error(errorMsg), `${CURRENT}:failed`]);
-        //   return;
-        // }
+        // Notice heightQuerydb is null, when querydb is initially setup. And, that is NORMAL
       } catch (e) {
         catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
         return;

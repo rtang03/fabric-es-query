@@ -11,6 +11,7 @@ const fabric = {
   queryChannelHeight: jest.fn(),
   queryBlock: jest.fn(),
   processBlockEvent: jest.fn(),
+  getDefaultChannelName: jest.fn(),
 };
 const queryDb = {
   getBlockHeight: jest.fn(),
@@ -26,6 +27,7 @@ const queryDb = {
 const SYNC_START = { type: 'syncJob/syncStart' };
 
 beforeAll(async () => {
+  fabric.getDefaultChannelName.mockImplementation(() => 'loanapp');
   // must be bigger than t1 test, i.e. timeout = 1000
   fabric.queryChannelHeight.mockImplementation(async () => waitSecond(2).then(() => 10));
   fabric.queryBlock.mockImplementation(async (channelName, blockNum) =>
@@ -65,8 +67,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, timeout: 1000, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-        expect(error.message).toEqual('timeout');
+        expect(error).toEqual('timeout');
       }
     );
   });
@@ -76,10 +77,10 @@ describe('sync tests -- failure tests', () => {
       waitSecond(1).then(() => Promise.reject())
     );
 
-    return dispatcher(SYNC_START, { ...option, timeout: 1000, showStateChanges: true }).catch(
+    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to find unverified blocks');
       }
     );
   });
@@ -87,34 +88,10 @@ describe('sync tests -- failure tests', () => {
   it('t0a.2 - syncStart: fail to check unverified block - null', async () => {
     queryDb.findUnverified.mockImplementationOnce(async () => waitSecond(1).then(() => null));
 
-    return dispatcher(SYNC_START, { ...option, timeout: 1000, showStateChanges: true }).catch(
+    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t0b.1 - syncStart: fail to remove unverified block - reject', async () => {
-    queryDb.removeUnverifiedBlock.mockImplementation(async () =>
-      waitSecond(1).then(() => Promise.reject())
-    );
-
-    return dispatcher(SYNC_START, { ...option, timeout: 1000, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t0b.2 - syncStart: fail to remove unverified block - null', async () => {
-    queryDb.removeUnverifiedBlock.mockImplementation(async () => waitSecond(1).then(() => null));
-
-    return dispatcher(SYNC_START, { ...option, timeout: 1000, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to find unverified blocks');
       }
     );
   });
@@ -127,7 +104,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('invalid blockheight / fabric');
       }
     );
   });
@@ -138,7 +115,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('invalid blockheight / fabric');
       }
     );
   });
@@ -151,18 +128,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
-
-  it('t3.2 - syncStart: fail to query channel height / query - null', async () => {
-    queryDb.getBlockHeight.mockImplementationOnce(async () => waitSecond(1).then(() => null));
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('invalid blockheight / queydb');
       }
     );
   });
@@ -175,7 +141,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('invalid missingblocks');
       }
     );
   });
@@ -186,7 +152,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('invalid missingblocks');
       }
     );
   });
@@ -199,7 +165,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to queryBlock');
       }
     );
   });
@@ -210,31 +176,32 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to queryBlock');
       }
     );
   });
 
-  it('t6c.1 - syncStart: fail to processBlockEvent - reject', async () => {
-    fabric.queryBlock.mockImplementationOnce(async () =>
-      waitSecond(1).then(() => Promise.reject())
-    );
-
-    return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-      ({ status, error }) => {
-        expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
-      }
-    );
-  });
+  // it('t6c.1 - syncStart: fail to processBlockEvent - reject', async () => {
+  //   fabric.processBlockEvent.mockImplementationOnce(async () =>
+  //     waitSecond(1).then(() => {
+  //       throw new Error();
+  //     })
+  //   );
+  //   return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
+  //     ({ status, error }) => {
+  //       expect(status).toEqual('error');
+  //       expect(error).toEqual('fail to process block');
+  //     }
+  //   );
+  // });
 
   it('t6c.2 - syncStart: fail to processBlockEvent - null', async () => {
-    fabric.queryBlock.mockImplementationOnce(async () => waitSecond(1).then(() => null));
+    fabric.processBlockEvent.mockImplementationOnce(async () => waitSecond(1).then(() => null));
 
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to process block');
       }
     );
   });
@@ -247,7 +214,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to insert block');
       }
     );
   });
@@ -258,7 +225,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to insert block');
       }
     );
   });
@@ -271,7 +238,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to insert tx');
       }
     );
   });
@@ -282,7 +249,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to insert tx');
       }
     );
   });
@@ -295,7 +262,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to insert commit');
       }
     );
   });
@@ -306,10 +273,11 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to insert commit');
       }
     );
   });
+
   it('t6g.1 - syncStart: fail to update KeyValue table - reject', async () => {
     queryDb.updateInsertedBlockKeyValue.mockImplementationOnce(async () =>
       waitSecond(1).then(() => Promise.reject())
@@ -318,7 +286,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to update KeyValue table');
       }
     );
   });
@@ -331,7 +299,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to update KeyValue table');
       }
     );
   });
@@ -344,7 +312,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to verify block');
       }
     );
   });
@@ -355,7 +323,7 @@ describe('sync tests -- failure tests', () => {
     return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
       ({ status, error }) => {
         expect(status).toEqual('error');
-        expect(error).toBeInstanceOf(Error);
+        expect(error).toEqual('fail to verify block');
       }
     );
   });

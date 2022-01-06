@@ -15,22 +15,32 @@ afterAll(async () => {
 });
 
 describe('sync tests -- good tests', () => {
-  it('run 1x', async () => {
-    asyncScheduler.schedule(() => synchronizer.stop(), 5000);
-    await synchronizer.start(1);
-  });
+  // it('t1: run 1x', async () => {
+  //   await synchronizer.start(1);
+  //   asyncScheduler.schedule(async () => synchronizer.stop(), 2000);
+  //   await waitSecond(3);
+  //   console.log('test #1 done');
+  // });
+  //
+  // it('t2: run 1x', async () => {
+  //   await synchronizer.start(1);
+  //   asyncScheduler.schedule(async () => synchronizer.stop(), 2000);
+  //   await waitSecond(3);
+  //   console.log('test #2 done');
+  // });
 
   it('repeated start / stop', async () => {
-    asyncScheduler.schedule(() => synchronizer.stop(), 5000);
-    asyncScheduler.schedule(() => synchronizer.start(), 10000);
-    asyncScheduler.schedule(() => synchronizer.stop(), 15000);
     await synchronizer.start();
+    asyncScheduler.schedule(async () => synchronizer.stop(), 5000);
+    asyncScheduler.schedule(async () => synchronizer.start(), 10000);
+    asyncScheduler.schedule(async () => synchronizer.stop(), 15000);
+    await waitSecond(16);
   });
 
-  it('start / change syncTime / restart', async () => {
-    asyncScheduler.schedule(() => synchronizer.stopAndChangeSyncTime(2), 5000);
-    asyncScheduler.schedule(() => synchronizer.start(), 6000);
-    asyncScheduler.schedule(() => synchronizer.stop(), 18000);
-    await synchronizer.start();
-  });
+  // it('start / change syncTime / restart', async () => {
+  //   await synchronizer.start();
+  //   asyncScheduler.schedule(async () => synchronizer.stopAndChangeSyncTime(2), 5000);
+  //   asyncScheduler.schedule(async () => synchronizer.start(), 6000);
+  //   asyncScheduler.schedule(async () => synchronizer.stop(), 18000);
+  // });
 });

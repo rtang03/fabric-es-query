@@ -129,8 +129,6 @@ export const createSynchronizer: (
     getInfo: () => ({ persist, syncTime, currentJob, timeout, showStateChanges }),
     isSyncJobActive: () => subscription.closed,
     stopAndChangeRequestTimeout: (t) => {
-      // todo, throw exception, when there is running job
-
       timeout = t;
 
       subscription.unsubscribe();
@@ -140,8 +138,6 @@ export const createSynchronizer: (
       logger.info(`🛑  change requestTimeout: ${t}`);
     },
     stopAndChangeShowStateChanges: (s) => {
-      // todo, throw exception, when there is running job
-
       showStateChanges = s;
 
       subscription.unsubscribe();
@@ -151,8 +147,6 @@ export const createSynchronizer: (
       logger.info(`🛑  change requestTimeout: ${s}`);
     },
     stopAndChangeSyncTime: (t) => {
-      // todo, throw exception, when there is running job
-
       syncTime = t;
 
       subscription.unsubscribe();
@@ -163,8 +157,12 @@ export const createSynchronizer: (
 
       $jobs = interval(t * 1000).pipe(syncJobMap);
     },
-    start: (numberOfExecution) =>
+    start: async (numberOfExecution) =>
       new Promise((resolve) => {
+        // runOnce will wait for completion, before resolve(true);
+        // else, will resolve(true) without waiting
+        // runOnce is used for jest testing
+        const runOnce = numberOfExecution === 1;
         const $execution = numberOfExecution ? $jobs.pipe(take(numberOfExecution)) : $jobs;
 
         logger.info('⭕️  syncJob start');
@@ -174,6 +172,7 @@ export const createSynchronizer: (
         currentBatch++;
 
         subscription = $execution.subscribe(async ({ id }) => {
+          const broadcast = true;
           currentJob = `${currentBatch}-${id}`;
 
           Debug(`${NS}:start`)('currentJob: %s', currentJob);
@@ -181,35 +180,22 @@ export const createSynchronizer: (
           try {
             const result = await performAction(currentJob, { timeout, showStateChanges });
 
-            if (result?.status === 'ok') {
-              mCenter?.notify({
-                kind: KIND.SYSTEM,
-                title: MSG.SYNCJOB_OK,
-                broadcast: true,
-                save: false,
-              });
+            result?.status === 'ok' &&
+              mCenter?.notify({ kind: KIND.SYSTEM, title: MSG.SYNCJOB_OK, broadcast, save: false });
 
-              return resolve(true);
-            }
+            runOnce && resolve(true);
           } catch (error) {
             logger.error(util.format('fail to run syncStart, %j', error));
           }
 
-          mCenter?.notify({
-            kind: KIND.ERROR,
-            title: MSG.SYNCJOB_FAIL,
-            broadcast: true,
-            save: true,
-          });
-
-          resolve(false);
+          mCenter?.notify({ kind: KIND.ERROR, title: MSG.SYNCJOB_FAIL, broadcast, save: true });
+          runOnce && resolve(false);
         });
-
         subscription.add(() => logger.info('⛔️  syncJob tear down'));
+
+        !runOnce && resolve(true);
       }),
     stop: () => {
-      // todo, throw exception, when there is running job
-
       subscription.unsubscribe();
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
