@@ -74,6 +74,9 @@ const TEMPLATE: SyncJobState = {
 
 const NS = 'sync';
 
+/**
+ * Execution of one syncJob
+ */
 export const syncJob = createModel<RootModel>()({
   state: TEMPLATE as SyncJobState,
   reducers: {

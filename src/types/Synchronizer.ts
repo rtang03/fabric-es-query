@@ -13,7 +13,7 @@ export type Synchronizer = {
   };
   isBackendsReady: () => Promise<boolean>;
   start: (numberOfExecution?: number) => Promise<boolean>;
-  stop: () => void;
+  stop: () => Promise<void>;
   isSyncJobActive: () => boolean;
   stopAndChangeSyncTime: (syncTime: number) => void;
   stopAndChangeRequestTimeout: (timeout: number) => void;

@@ -227,7 +227,8 @@ export const createFabricGateway: (
 
         wallet = await Wallets.newFileSystemWallet(fullPath);
 
-        debugL2('Filesystem wallet found');
+        logger.info('Filesystem wallet found');
+
         debugL2('adminId: %s', caAdminId);
 
         identity = await wallet.get(caAdminId);
@@ -242,7 +243,10 @@ export const createFabricGateway: (
         // Step 1: enroll ca admin
         if (!identity) {
           await enrollCaIdentity(caAdminId);
+
           meters?.enrollCount.add(1);
+
+          mCenter?.notify({ kind: KIND.SYSTEM, title: MSG.ENROLLED });
         }
 
         // Step 2: enroll organization-admin
@@ -391,9 +395,10 @@ export const createFabricGateway: (
     /* INITIALIZE CHANNEL EVENT HUBS */
     initializeChannelEventHubs: async () => {
       const me = 'initializeChannelEventHubs';
-      logger.info(`=== ${me}() ===`);
       const save = true;
       const broadcast = true;
+
+      logger.info(`=== ${me}() ===`);
 
       const createChannelEventHub = async (channelName: string) => {
         const current =
@@ -404,7 +409,7 @@ export const createFabricGateway: (
           async (event) => {
             logger.info(`blocknum arrives: ${event.blockNumber.low}`);
 
-            if (!mCenter) logger.error('Message center not found; blocklistener cannot notify.');
+            // TODO do something
 
             return (
               !(event.blockNumber.low === 0 && event.blockNumber.high === 0) &&
@@ -430,6 +435,15 @@ export const createFabricGateway: (
           await createChannelEventHub(channelName);
         } catch (e) {
           logger.error(`Failed to initializeChannelEventHubs from ${channelName} : `, e);
+
+          mCenter?.notify({
+            kind: KIND.ERROR,
+            title: MSG.CHANNELHUB_LISTENER_FAIL,
+            error: e.message,
+            broadcast: true,
+            save: true,
+          });
+
           return null;
         }
       }

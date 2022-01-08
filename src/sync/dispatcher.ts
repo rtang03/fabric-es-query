@@ -6,7 +6,7 @@ import type { FabricGateway, MessageCenter, QueryDb } from '../types';
 import { generateToken } from '../utils';
 import { store } from './store';
 
-export type TResult = { status: string; data?: any; error?: any };
+export type DispatcherResult = { status: string; data?: any; error?: any };
 
 export type TAction = {
   type: string;
@@ -36,8 +36,8 @@ const removeEmptyField = (syncJob: any) =>
 export const dispatcher: (
   action: { type: string; payload?: any },
   option?: TActionOption
-) => Promise<TResult> = (action, option) =>
-  new Promise<TResult>((resolve, reject) => {
+) => Promise<DispatcherResult> = (action, option) =>
+  new Promise<DispatcherResult>((resolve, reject) => {
     const { showStateChanges, logger } = option;
 
     if (store.getState()?.syncJob.running) {

@@ -1,19 +1,19 @@
+import util from 'util';
 import { type Tracer } from '@opentelemetry/api';
 import Debug from 'debug';
-import { interval, map, Subject, Subscription, take, merge } from 'rxjs';
+import { interval, map, Subscription, take } from 'rxjs';
 import { Connection, Repository } from 'typeorm';
 import winston from 'winston';
 import WebSocket from 'ws';
 import { KIND, MSG } from '../message';
 import type { FabricGateway, MessageCenter, QueryDb, Synchronizer } from '../types';
-import { type Meters, waitSecond } from '../utils';
-import { dispatcher, DispatcherResult } from './dispatcher';
+import { type Meters } from '../utils';
+import { dispatcher } from './dispatcher';
 import { Job } from './entities';
-import { store } from './store';
 
 type SyncJob = {
   id: number;
-  timestamp?: Date;
+  timestamp: Date;
 };
 
 export type CreateSynchronizerOption = {
@@ -49,23 +49,19 @@ export const createSynchronizer: (
     messageCenter: mCenter,
   }
 ) => {
-  const executionInterval = 1;
   const NS = 'sync';
   const SYNC_START = { type: 'syncJob/syncStart' };
   const syncJobMap = map<number, SyncJob>((id) => ({ id, timestamp: new Date() }));
-  const execution$ = interval(executionInterval * 1000).pipe(syncJobMap);
-  const stop$ = new Subject<SyncJob>();
 
   let conn: Connection;
   let jobRepository: Repository<Job>;
+  let subscription: Subscription;
   let syncTime = initialSyncTime;
   let timeout = initialTimeoutMs;
   let showStateChanges = initialShowStateChanges;
   let currentBatch = 0;
   let currentJob = '';
-  let regularSync$ = interval(syncTime * 1000).pipe(syncJobMap);
-  let executionSubscription: Subscription;
-  let regularSyncSubscription: Subscription;
+  let $jobs = interval(initialSyncTime * 1000).pipe(syncJobMap);
 
   logger.info('Preparing synchronizer');
   logger.info(`syncTime: ${initialSyncTime}`);
@@ -74,32 +70,29 @@ export const createSynchronizer: (
   logger.info(`persist: ${persist}`);
   logger.info(`broadcaster: ${!!broadcaster}`);
 
-  const performAction: (payload, option?) => Promise<DispatcherResult> = dev
+  const performAction = dev
     ? async (payload) => {
-        // dummy implementation
-        console.log('test-', payload);
-
-        return { status: 'ok', error: null };
-      }
+      // dummy implementation
+      console.log(payload);
+      return { status: 'ok', error: null };
+    }
     : async (payload, option) => {
-        const result = await dispatcher(SYNC_START, {
-          fabric,
-          queryDb,
-          logger,
-          messageCenter: mCenter,
-          timeout: option?.timeout || initialTimeoutMs,
-          showStateChanges:
-            option?.showStateChanges === undefined
-              ? initialShowStateChanges
-              : option.showStateChanges,
-        });
+      const result = await dispatcher(SYNC_START, {
+        fabric,
+        queryDb,
+        logger,
+        messageCenter: mCenter,
+        timeout: option?.timeout || initialTimeoutMs,
+        showStateChanges:
+          option?.showStateChanges === undefined
+            ? initialShowStateChanges
+            : option.showStateChanges,
+      });
 
-        logger.info(`syncJob result: ${result.status} at ${new Date()}`);
-
-        Debug(NS)('sync-result %O', result);
-
-        return result;
-      };
+      logger.info(`syncJob result: ${result.status} at ${new Date()}`);
+      Debug(NS)('sync-result %O', result);
+      return result;
+    };
 
   return {
     connect: async () => {
@@ -134,11 +127,11 @@ export const createSynchronizer: (
       logger.info(`${NS} disconnectSyncDb`);
     },
     getInfo: () => ({ persist, syncTime, currentJob, timeout, showStateChanges }),
-    isSyncJobActive: () => regularSyncSubscription.closed,
+    isSyncJobActive: () => subscription.closed,
     stopAndChangeRequestTimeout: (t) => {
       timeout = t;
 
-      regularSyncSubscription.unsubscribe();
+      subscription.unsubscribe();
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
 
@@ -147,7 +140,7 @@ export const createSynchronizer: (
     stopAndChangeShowStateChanges: (s) => {
       showStateChanges = s;
 
-      regularSyncSubscription.unsubscribe();
+      subscription.unsubscribe();
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
 
@@ -156,80 +149,54 @@ export const createSynchronizer: (
     stopAndChangeSyncTime: (t) => {
       syncTime = t;
 
-      regularSyncSubscription.unsubscribe();
+      subscription.unsubscribe();
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
 
       logger.info(`🛑  change syncTime: ${t}`);
 
-      regularSync$ = interval(t * 1000).pipe(syncJobMap);
+      $jobs = interval(t * 1000).pipe(syncJobMap);
     },
     start: async (numberOfExecution) =>
       new Promise((resolve) => {
         // runOnce will wait for completion, before resolve(true);
         // else, will resolve(true) without waiting
         // runOnce is used for jest testing
-        const broadcast = true;
-
-        // emit by numberOfExecution
-        // const sync$ = numberOfExecution ? regularSync$.pipe(take(numberOfExecution)) : regularSync$;
-
-        // emit every 15 min, or initialSyncTime
-        regularSyncSubscription = regularSync$.subscribe(({ id, timestamp }) => {
-          Debug(NS)(`dispatch regular syncJob, ${id} at ${timestamp}`);
-
-          store.dispatch({ type: 'queue/newJob', payload: { id, kind: 'regular' } });
-        });
-        regularSyncSubscription.add(() => {
-          logger.info('⛔️  regularSync tear down');
-
-          mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast });
-        });
+        const runOnce = numberOfExecution === 1;
+        const $execution = numberOfExecution ? $jobs.pipe(take(numberOfExecution)) : $jobs;
 
         logger.info('⭕️  syncJob start');
 
-        mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_START, broadcast });
+        mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_START, broadcast: true, save: false });
 
         currentBatch++;
 
-        // emit every second
-        executionSubscription = merge(execution$, stop$).subscribe(async ({ id, timestamp }) => {
-          const { workInProgress, queued } = store.getState().queue;
+        subscription = $execution.subscribe(async ({ id }) => {
+          const broadcast = true;
           currentJob = `${currentBatch}-${id}`;
 
-          // used to exit the execution loop
-          if (id < 0) return resolve(false);
+          Debug(`${NS}:start`)('currentJob: %s', currentJob);
 
-          // checking if there is queue job
-          if (!workInProgress && ~~queued.length) {
-            Debug(NS)(`queued job found; dispatch ${currentJob}`);
+          try {
+            const result = await performAction(currentJob, { timeout, showStateChanges });
 
-            // dispatch once
-            await store.dispatch.queue.dispatchSyncJob({
-              action: performAction(currentJob, { timeout, showStateChanges }),
-              option: { logger },
-            });
+            result?.status === 'ok' &&
+            mCenter?.notify({ kind: KIND.SYSTEM, title: MSG.SYNCJOB_OK, broadcast, save: false });
 
-            if (numberOfExecution === id + 1) {
-              regularSyncSubscription.unsubscribe();
-
-              resolve(true);
-            }
+            runOnce && resolve(true);
+          } catch (error) {
+            logger.error(util.format('fail to run syncStart, %j', error));
           }
-        });
-        executionSubscription.add(() => {
-          logger.info('⛔️  execution tear down');
 
-          mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast });
+          mCenter?.notify({ kind: KIND.ERROR, title: MSG.SYNCJOB_FAIL, broadcast, save: true });
+          runOnce && resolve(false);
         });
+        subscription.add(() => logger.info('⛔️  syncJob tear down'));
+
+        !runOnce && resolve(true);
       }),
-    stop: async () => {
-      stop$.next({ id: -1 });
-
-      await waitSecond(1);
-
-      regularSyncSubscription.unsubscribe();
-      executionSubscription.unsubscribe();
+    stop: () => {
+      subscription.unsubscribe();
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
     },

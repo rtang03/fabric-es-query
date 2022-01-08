@@ -164,14 +164,12 @@ describe('sync tests', () => {
     synchronizer.isBackendsReady().then((result) => expect(result).toBeTruthy()));
 
   it('sync start', async () => {
-    // Notice that this test will run only once
     const result = await synchronizer.start(1);
 
     if (result) {
       const blockHeighQuery = await queryDb.getBlockHeight();
       expect(blockHeighQuery).toEqual(11);
 
-      // validate data after dispatch
       const blocks = await queryDb.findBlock({
         skip: 0,
         take: 11,

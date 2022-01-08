@@ -14,6 +14,8 @@ export const MSG = {
   // notify by fabricGateway
   CHANNEL_HEIGHT: 'latest channel height',
   BLOCK_ARRIVAL: 'block arrives',
+  ENROLLED: 'identity enrolled',
+  CHANNELHUB_LISTENER_FAIL: 'channel hub listener failure',
   // notify by synchronizer
   SYNC_START: 'sync start',
   SYNC_STOP: 'sync stop',

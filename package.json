@@ -23,8 +23,9 @@
     "test:mcenter": "jest mcenter.test",
     "test:mcenter-debug": "DEBUG=mcenter* jest mcenter.test",
     "test:sync-dispatcher": "jest dispatcher.test",
-    "test:sync-dummy": "jest dummySync.test",
+    "test:sync-dummy": "DEBUG=sync* jest dummySync.test",
     "test:synchronizer": "DEBUG=sync* jest synchronizer.test",
+    "test:listener": "DEBUG=sync:queue* jest listener.test",
     "server": "node --require './dist/tracing.js' ./dist/app.js",
     "client": "node --experimental-modules ./dist/client.js",
     "start": "node ./dist/sync.js"
