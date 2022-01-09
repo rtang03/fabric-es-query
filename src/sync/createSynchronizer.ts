@@ -136,27 +136,33 @@ export const createSynchronizer: (
     getInfo: () => ({ persist, syncTime, currentJob, timeout, showStateChanges }),
     isSyncJobActive: () => regularSyncSubscription.closed,
     stopAndChangeRequestTimeout: (t) => {
+      stop$.next({ id: -1 });
       timeout = t;
 
       regularSyncSubscription.unsubscribe();
+      executionSubscription.unsubscribe();
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
 
       logger.info(`🛑  change requestTimeout: ${t}`);
     },
     stopAndChangeShowStateChanges: (s) => {
+      stop$.next({ id: -1 });
       showStateChanges = s;
 
       regularSyncSubscription.unsubscribe();
+      executionSubscription.unsubscribe();
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
 
       logger.info(`🛑  change requestTimeout: ${s}`);
     },
     stopAndChangeSyncTime: (t) => {
+      stop$.next({ id: -1 });
       syncTime = t;
 
       regularSyncSubscription.unsubscribe();
+      executionSubscription.unsubscribe();
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
 
@@ -230,6 +236,7 @@ export const createSynchronizer: (
 
       regularSyncSubscription.unsubscribe();
       executionSubscription.unsubscribe();
+      // stop$.unsubscribe();
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
     },
