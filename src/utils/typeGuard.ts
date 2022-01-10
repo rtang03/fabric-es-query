@@ -1,6 +1,6 @@
+import { Incident } from '../message/entities';
 import { Blocks, Commit, Transactions } from '../querydb/entities';
 import type { ConnectionProfile, PlatformConfig } from '../types';
-import { Incident } from '../message/entities';
 
 export const isConnectionProfile = (input: any): input is ConnectionProfile =>
   input?.channels !== undefined &&

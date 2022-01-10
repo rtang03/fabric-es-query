@@ -41,6 +41,12 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "eventstore" <<-EOS
     endorser_signature character varying DEFAULT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS fabricwallet
+  (
+    id VARCHAR(255) PRIMARY KEY,
+    data TEXT NOT NULl
+  );
+
   Alter sequence transactions_id_seq restart with 6;
 
   CREATE INDEX ON Blocks

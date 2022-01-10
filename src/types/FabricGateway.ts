@@ -5,11 +5,12 @@ import type {
   DefaultQueryHandlerOptions,
 } from 'fabric-network';
 import type { ConnectedGatewayOptions } from 'fabric-network/lib/gateway';
-import { common, protos } from 'fabric-protos';
-import ChannelQueryResponse = protos.ChannelQueryResponse;
-import { TBlock } from './TBlock';
-import winston from 'winston';
+import { protos } from 'fabric-protos';
+import { Subject } from 'rxjs';
 import { Blocks, Transactions } from '../querydb/entities';
+import { SyncJob } from './Synchronizer';
+import {type TBlock } from './TBlock';
+import ChannelQueryResponse = protos.ChannelQueryResponse;
 
 export type FabricGateway = {
   getInfo: () => FabricGatewayInfo;
@@ -26,7 +27,7 @@ export type FabricGateway = {
   queryBlock: (channelName: string, blockNum: number) => Promise<any>;
   queryChannelHeight: (channelName: string) => Promise<number>;
   getDefaultChannelName: () => string;
-  initializeChannelEventHubs: () => Promise<boolean>;
+  initializeChannelEventHubs: (newBlock$: Subject<SyncJob>) => Promise<boolean>;
   processBlockEvent: (block: TBlock) => [Blocks, Partial<Transactions>[]];
 };
 

@@ -1,20 +1,14 @@
 import { type Tracer } from '@opentelemetry/api';
 import Debug from 'debug';
-import { interval, map, Subject, Subscription, take, merge } from 'rxjs';
-import { Connection, Repository } from 'typeorm';
+import { interval, map, Subject, Subscription, merge } from 'rxjs';
+import { Connection } from 'typeorm';
 import winston from 'winston';
 import WebSocket from 'ws';
 import { KIND, MSG } from '../message';
-import type { FabricGateway, MessageCenter, QueryDb, Synchronizer } from '../types';
+import type { FabricGateway, MessageCenter, QueryDb, Synchronizer, SyncJob } from '../types';
 import { type Meters, waitSecond } from '../utils';
-import { dispatcher, DispatcherResult } from './dispatcher';
-import { Job } from './entities';
+import { dispatcher, type DispatcherResult } from './dispatcher';
 import { store } from './store';
-
-type SyncJob = {
-  id: number;
-  timestamp?: Date;
-};
 
 export type CreateSynchronizerOption = {
   persist?: boolean;
@@ -31,6 +25,20 @@ export type CreateSynchronizerOption = {
   dev?: boolean; // if true, no job dispatching
 };
 
+/**
+ *
+ * @param initialSyncTime
+ * @param persist
+ * @param fabric
+ * @param queryDb
+ * @param broadcaster
+ * @param connection
+ * @param logger
+ * @param dev
+ * @param initialTimeoutMs
+ * @param initialShowStateChanges
+ * @param mCenter
+ */
 export const createSynchronizer: (
   initialSyncTime: number,
   option: CreateSynchronizerOption
@@ -49,15 +57,18 @@ export const createSynchronizer: (
     messageCenter: mCenter,
   }
 ) => {
+  // interval for checking job queue
   const executionInterval = 1;
+  // used for Debug
   const NS = 'sync';
+  const LAST_JOB = -1;
   const SYNC_START = { type: 'syncJob/syncStart' };
   const syncJobMap = map<number, SyncJob>((id) => ({ id, timestamp: new Date() }));
   const execution$ = interval(executionInterval * 1000).pipe(syncJobMap);
   const stop$ = new Subject<SyncJob>();
+  const newBlock$ = new Subject<SyncJob>();
 
   let conn: Connection;
-  let jobRepository: Repository<Job>;
   let syncTime = initialSyncTime;
   let timeout = initialTimeoutMs;
   let showStateChanges = initialShowStateChanges;
@@ -136,7 +147,7 @@ export const createSynchronizer: (
     getInfo: () => ({ persist, syncTime, currentJob, timeout, showStateChanges }),
     isSyncJobActive: () => regularSyncSubscription.closed,
     stopAndChangeRequestTimeout: (t) => {
-      stop$.next({ id: -1 });
+      stop$.next({ id: LAST_JOB });
       timeout = t;
 
       regularSyncSubscription.unsubscribe();
@@ -147,7 +158,7 @@ export const createSynchronizer: (
       logger.info(`🛑  change requestTimeout: ${t}`);
     },
     stopAndChangeShowStateChanges: (s) => {
-      stop$.next({ id: -1 });
+      stop$.next({ id: LAST_JOB });
       showStateChanges = s;
 
       regularSyncSubscription.unsubscribe();
@@ -158,7 +169,7 @@ export const createSynchronizer: (
       logger.info(`🛑  change requestTimeout: ${s}`);
     },
     stopAndChangeSyncTime: (t) => {
-      stop$.next({ id: -1 });
+      stop$.next({ id: LAST_JOB });
       syncTime = t;
 
       regularSyncSubscription.unsubscribe();
@@ -172,16 +183,10 @@ export const createSynchronizer: (
     },
     start: async (numberOfExecution) =>
       new Promise((resolve) => {
-        // runOnce will wait for completion, before resolve(true);
-        // else, will resolve(true) without waiting
-        // runOnce is used for jest testing
         const broadcast = true;
 
-        // emit by numberOfExecution
-        // const sync$ = numberOfExecution ? regularSync$.pipe(take(numberOfExecution)) : regularSync$;
-
         // emit every 15 min, or initialSyncTime
-        regularSyncSubscription = regularSync$.subscribe(({ id, timestamp }) => {
+        regularSyncSubscription = merge(regularSync$, newBlock$).subscribe(({ id, timestamp }) => {
           Debug(NS)(`dispatch regular syncJob, ${id} at ${timestamp}`);
 
           store.dispatch({ type: 'queue/newJob', payload: { id, kind: 'regular' } });
@@ -196,6 +201,7 @@ export const createSynchronizer: (
 
         mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_START, broadcast });
 
+        // batch number increase for every start / restart
         currentBatch++;
 
         // emit every second
@@ -204,7 +210,7 @@ export const createSynchronizer: (
           currentJob = `${currentBatch}-${id}`;
 
           // used to exit the execution loop
-          if (id < 0) return resolve(false);
+          if (id === LAST_JOB) return resolve(false);
 
           // checking if there is queue job
           if (!workInProgress && ~~queued.length) {
@@ -216,6 +222,7 @@ export const createSynchronizer: (
               option: { logger },
             });
 
+            // exit start(), when numberOfExecution reaches
             if (numberOfExecution === id + 1) {
               regularSyncSubscription.unsubscribe();
 
@@ -230,13 +237,12 @@ export const createSynchronizer: (
         });
       }),
     stop: async () => {
-      stop$.next({ id: -1 });
+      stop$.next({ id: LAST_JOB });
 
       await waitSecond(1);
 
       regularSyncSubscription.unsubscribe();
       executionSubscription.unsubscribe();
-      // stop$.unsubscribe();
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
     },
@@ -257,8 +263,6 @@ export const createSynchronizer: (
         return null;
       }
     },
-    getState: async () => {
-      return null;
-    },
+    getNewBlockObs: () => newBlock$,
   };
 };

@@ -21,6 +21,9 @@ export const MSG = {
   SYNC_STOP: 'sync stop',
   SYNCJOB_OK: 'sync job ok',
   SYNCJOB_FAIL: 'sync job fail',
+  // notify by fabric:wallet
+  WALLET_ADDED: 'wallet identity added',
+  WALLET_REMOVED: 'wallet identity removed'
 };
 
 export const KIND = {

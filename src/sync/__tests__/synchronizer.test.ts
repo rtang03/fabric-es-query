@@ -140,7 +140,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await waitSecond(3);
-  synchronizer.stop();
+  await synchronizer.stop();
   messageCenter.getMessagesObs().unsubscribe();
   await defaultConnection.close();
   await queryDb.disconnect();

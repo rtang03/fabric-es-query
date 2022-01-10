@@ -18,18 +18,21 @@ import {
   BlockEvent,
 } from 'fabric-network';
 import fabprotos from 'fabric-protos';
+import { Subject } from 'rxjs';
+import { Connection } from 'typeorm';
 import winston from 'winston';
 import { KIND, MSG } from '../message';
-import type { ConnectionProfile, FabricGateway, MessageCenter } from '../types';
+import type { ConnectionProfile, FabricGateway, MessageCenter, SyncJob } from '../types';
 import { type Meters } from '../utils';
 import { processBlockEvent } from './processBlockEvent';
+import { createPsqlWallet } from './psqlWallet';
 
 const { BlockDecoder } = require('fabric-common');
 
 export type CreateFabricGatewayOption = {
   adminSecret: string;
   adminId: string;
-  walletPath: string;
+  connection: Connection;
   logger: winston.Logger;
   meters?: Partial<Meters>;
   tracer?: Tracer;
@@ -41,7 +44,7 @@ export const createFabricGateway: (
   option: CreateFabricGatewayOption
 ) => FabricGateway = (
   profile,
-  { adminId, adminSecret, walletPath, logger, meters, tracer, messageCenter: mCenter }
+  { adminId, adminSecret, connection, logger, meters, tracer, messageCenter: mCenter }
 ) => {
   let wallet: Wallet;
   let identity: Identity;
@@ -52,7 +55,6 @@ export const createFabricGateway: (
   let caAdminUserContext: User;
   let isGatewayConnected: boolean;
   let network: Network;
-  let channelEventHubs: Record<string, BlockListener>;
 
   logger.info('Loading configuration');
 
@@ -68,6 +70,7 @@ export const createFabricGateway: (
   const mspId = profile.organizations?.[profile.client?.organization]?.mspid;
   const channels = Object.keys(profile.channels);
   const defaultChannel = Object.keys(profile.channels)?.[0];
+  const channelEventHubs: Record<string, BlockListener> = {};
 
   !caName && logger.error('missing caName');
   !caUrl && logger.error('missing caUrl');
@@ -176,7 +179,6 @@ export const createFabricGateway: (
       logger.info(`msp: ${mspId}`);
       logger.info(`defaultChannel: ${defaultChannel}`);
 
-      debugL2('wallletPath: %s', walletPath);
       debugL2('connectionProfile: %O', profile);
 
       const info = {
@@ -194,7 +196,15 @@ export const createFabricGateway: (
 
       return info;
     },
-    /* INITIALIZE */
+    /**
+     * initialize()
+     * - configure EventHandlerStrategies and QueryHandlerStrategies
+     * - enroll (not register) CA admin
+     * - enroll (not register) organizational admin
+     * - connect fabric-gateway
+     * - connect PsqlWallet
+     * @param option
+     */
     initialize: async (option) => {
       const me = 'initialize';
       const debugL2 = Debug(`${NS}:${me}`);
@@ -221,13 +231,9 @@ export const createFabricGateway: (
       }
 
       try {
-        const fullPath = path.join(process.cwd(), walletPath);
+        wallet = createPsqlWallet({ conn: connection, logger, messageCenter: mCenter });
 
-        debugL2('wallet fullPath: %s', fullPath);
-
-        wallet = await Wallets.newFileSystemWallet(fullPath);
-
-        logger.info('Filesystem wallet found');
+        logger.info('Database wallet found');
 
         debugL2('adminId: %s', caAdminId);
 
@@ -280,7 +286,11 @@ export const createFabricGateway: (
         return null;
       }
     },
-    /* REGISTER */
+    /**
+     * registerNewUser()
+     * @param enrollmentID
+     * @param enrollmentSecret
+     */
     registerNewUser: async (enrollmentID, enrollmentSecret) => {
       const me = 'registerNewUser';
       logger.info(`=== ${me}() ===`);
@@ -302,7 +312,9 @@ export const createFabricGateway: (
       }
     },
     /* DISCONNECT */
-    disconnect: () => gateway.disconnect(),
+    disconnect: () => {
+      gateway.disconnect();
+    },
     /* IDENTITY INFO */
     getIdentityInfo: async (label) => {
       const me = 'getIdentityInfo';
@@ -393,7 +405,7 @@ export const createFabricGateway: (
       }
     },
     /* INITIALIZE CHANNEL EVENT HUBS */
-    initializeChannelEventHubs: async () => {
+    initializeChannelEventHubs: async (newBlock$: Subject<SyncJob>) => {
       const me = 'initializeChannelEventHubs';
       const save = true;
       const broadcast = true;
@@ -407,12 +419,13 @@ export const createFabricGateway: (
         // Skip first block, it is process by peer event hub
         channelEventHubs[channelName] = await current.addBlockListener(
           async (event) => {
-            logger.info(`blocknum arrives: ${event.blockNumber.low}`);
+            const blocknum = event.blockNumber.low;
+            logger.info(`blocknum arrives: ${blocknum}`);
 
-            // TODO do something
+            if (!(event.blockNumber.low === 0 && event.blockNumber.high === 0)) {
+              // notify synchronizer
+              newBlock$.next({ id: parseFloat(`99.${blocknum}`), blocknum, timestamp: new Date() });
 
-            return (
-              !(event.blockNumber.low === 0 && event.blockNumber.high === 0) &&
               mCenter?.notify<BlockEvent>({
                 kind: KIND.SYSTEM,
                 title: MSG.BLOCK_ARRIVAL,
@@ -420,8 +433,8 @@ export const createFabricGateway: (
                 data: event,
                 broadcast,
                 save,
-              })
-            );
+              });
+            }
           },
           { type: 'full' }
         );

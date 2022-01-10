@@ -7,6 +7,7 @@ import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import fetch from 'isomorphic-unfetch';
 import yaml from 'js-yaml';
 import rimraf from 'rimraf';
+import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import { createMessageCenter } from '../../message';
 import type { ConnectionProfile, FabricGateway, MessageCenter } from '../../types';
 import {
@@ -18,6 +19,7 @@ import {
   waitSecond,
 } from '../../utils';
 import { createFabricGateway } from '../createFabricGateway';
+import { FabricWallet } from '../entities';
 
 /**
  * Running:
@@ -27,10 +29,29 @@ import { createFabricGateway } from '../createFabricGateway';
 let messageCenter: MessageCenter;
 let fg: FabricGateway;
 let profile: ConnectionProfile;
+let defaultConnection: Connection;
+let connection: Connection;
+let testConnectionOptions: ConnectionOptions;
 let metrics: {
   meters: Partial<Meters>;
   exporter: PrometheusExporter;
   meterProvider: MeterProvider;
+};
+
+const schema = 'fabrictest';
+const connectionOptions: ConnectionOptions = {
+  name: 'default',
+  type: 'postgres' as any,
+  host: process.env.PSQL_HOST,
+  port: parseInt(process.env.PSQL_PORT, 10),
+  username: process.env.PSQL_USERNAME,
+  password: process.env.PSQL_PASSWD,
+  database: process.env.PSQL_DATABASE,
+  logging: true,
+  synchronize: false,
+  dropSchema: false,
+  entities: [FabricWallet],
+  connectTimeoutMS: 10000,
 };
 
 beforeAll(async () => {
@@ -78,10 +99,19 @@ beforeAll(async () => {
   }
 
   try {
+    // use different schema for testing
+    defaultConnection = await createConnection(connectionOptions);
+    await defaultConnection.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
+    testConnectionOptions = {
+      ...connectionOptions,
+      ...{ name: schema, schema, synchronize: true, dropSchema: true },
+    };
+    connection = await createConnection(testConnectionOptions);
+
     fg = createFabricGateway(profile, {
       adminId: process.env.ADMIN_ID,
       adminSecret: process.env.ADMIN_SECRET,
-      walletPath: process.env.WALLET,
+      connection,
       logger,
       meters: metrics.meters,
       messageCenter,
@@ -93,7 +123,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await defaultConnection.close();
+  await connection.close();
   messageCenter.getMessagesObs().unsubscribe();
+  fg.disconnect();
   await waitSecond(2);
   await metrics.meterProvider.shutdown();
   await metrics.exporter.stopServer();
