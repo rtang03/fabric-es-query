@@ -3,9 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import util from 'util';
 import yaml from 'js-yaml';
-import rimraf from 'rimraf';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import { createFabricGateway } from '../../fabric';
+import { FabricWallet } from '../../fabric/entities';
 import { createMessageCenter } from '../../message';
 import { createQueryDb } from '../../querydb';
 import { Blocks, Commit, KeyValue, Transactions } from '../../querydb/entities';
@@ -30,7 +30,7 @@ let fabric: FabricGateway;
 let profile: ConnectionProfile;
 let queryDb: QueryDb;
 let defaultConnection: Connection;
-let testConnection: Promise<Connection>;
+let connection: Connection;
 let testConnectionOptions: ConnectionOptions;
 
 const schema = 'synctest';
@@ -45,7 +45,7 @@ const connectionOptions: ConnectionOptions = {
   logging: true,
   synchronize: false,
   dropSchema: false,
-  entities: [Blocks, Transactions, Commit, KeyValue],
+  entities: [Blocks, Transactions, Commit, KeyValue, FabricWallet],
   connectTimeoutMS: 10000,
 };
 
@@ -55,19 +55,7 @@ beforeAll(async () => {
   // below subscription will show both data and error for debugging purpose
   messageCenter.subscribe({
     next: (m) => console.log(util.format('📨 message received: %j', m)),
-    error: (e) => console.error(util.format('❌ message error: %j', e)),
-    complete: () => console.log('subscription completed'),
   });
-
-  // removing pre-existing wallet
-  try {
-    await new Promise((resolve, reject) =>
-      rimraf(path.join(__dirname, '__wallet__'), (err) => (err ? reject(err) : resolve(true)))
-    );
-  } catch {
-    console.error('fail to remove wallet');
-    process.exit(1);
-  }
 
   // Loading connection profile
   try {
@@ -86,10 +74,19 @@ beforeAll(async () => {
 
   // FabricGateway
   try {
+    // use different schema for testing
+    defaultConnection = await createConnection(connectionOptions);
+    await defaultConnection.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
+    testConnectionOptions = {
+      ...connectionOptions,
+      ...{ name: schema, schema, synchronize: true, dropSchema: true },
+    };
+    connection = await createConnection(testConnectionOptions);
+
     fabric = createFabricGateway(profile, {
       adminId: process.env.ADMIN_ID,
       adminSecret: process.env.ADMIN_SECRET,
-      walletPath: process.env.WALLET,
+      connection,
       logger,
       messageCenter,
     });
@@ -100,18 +97,9 @@ beforeAll(async () => {
 
   // QueryDb
   try {
-    // use different schema for testing
-    defaultConnection = await createConnection(connectionOptions);
-    await defaultConnection.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
-    testConnectionOptions = {
-      ...connectionOptions,
-      ...{ name: schema, schema, synchronize: true, dropSchema: true },
-    };
-    testConnection = createConnection(testConnectionOptions);
-
     queryDb = createQueryDb({
       logger,
-      connection: testConnection,
+      connection,
       nonDefaultSchema: schema,
       messageCenter,
     });
@@ -122,10 +110,10 @@ beforeAll(async () => {
 
   // Synchronizer
   try {
-    // Notice that first sync job will be dispatched after initialSyncTime (2 second) is lapsed.
-    synchronizer = createSynchronizer(2, {
+    // Notice that first sync job will be dispatched after initialSyncTime (10 second) is lapsed.
+    synchronizer = createSynchronizer(10, {
       persist: false,
-      initialTimeoutMs: 1500,
+      initialTimeoutMs: 2000,
       initialShowStateChanges: true,
       dev: false,
       fabric,
@@ -143,6 +131,7 @@ afterAll(async () => {
   await synchronizer.stop();
   messageCenter.getMessagesObs().unsubscribe();
   await defaultConnection.close();
+  fabric.disconnect();
   await queryDb.disconnect();
   await waitSecond(1);
 });
@@ -157,15 +146,13 @@ describe('sync tests', () => {
     expect(isCaAdminInWallet).toBeTruthy();
   });
 
-  it('connect queryDb', async () =>
-    queryDb.connect().then((result) => expect(result instanceof Connection).toBeTruthy()));
-
   it('isBackendsReady', async () =>
     synchronizer.isBackendsReady().then((result) => expect(result).toBeTruthy()));
 
   it('sync start', async () => {
     // Notice that this test will run only once
     const result = await synchronizer.start(1);
+    await synchronizer.stop();
 
     if (result) {
       const blockHeighQuery = await queryDb.getBlockHeight();

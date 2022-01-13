@@ -1,7 +1,7 @@
 import { Column, PrimaryGeneratedColumn, Entity } from 'typeorm';
 
-@Entity('job')
-export class Job {
+@Entity('fabrictx')
+export class FabricTransaction {
   @PrimaryGeneratedColumn({ type: 'int' })
   id: number;
 
@@ -17,6 +17,9 @@ export class Job {
   @Column({ type: 'varchar', nullable: false })
   status: string;
 
-  @Column({ type: 'simple-json', nullable: true })
-  logs: any;
+  @Column({ type: 'varchar', nullable: true })
+  txid: any;
+
+  @Column({ type: 'timestamp', nullable: true })
+  submit_at: Date;
 }

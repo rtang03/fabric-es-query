@@ -9,7 +9,7 @@ import { m1a, m2a, m3a, m4a, m5a, m1b, m2b, m3b, m4b, m5b } from './__utils__/da
 let mCenter: MessageCenter;
 let mCenterWithSave: MessageCenter;
 let defaultConnection: Connection;
-let testConnection: Promise<Connection>;
+let connection: Connection;
 let testConnectionOptions: ConnectionOptions;
 
 const schema = 'mcentertest';
@@ -37,10 +37,10 @@ beforeAll(async () => {
       ...connectionOptions,
       ...{ name: schema, schema, synchronize: true, dropSchema: true },
     };
-    testConnection = createConnection(testConnectionOptions);
+    connection = await createConnection(testConnectionOptions);
 
     mCenter = createMessageCenter({ logger, persist: false });
-    mCenterWithSave = createMessageCenter({ logger, connection: testConnection, persist: true });
+    mCenterWithSave = createMessageCenter({ logger, connection, persist: true });
   } catch (e) {
     console.error('fail to createMessageCenter', e);
     process.exit(1);
@@ -63,15 +63,7 @@ describe('message center test', () => {
   });
 
   it('mCenterWithSave isConnected', async () =>
-    mCenterWithSave.isConnected().then((result) => expect(result).toBeFalsy()));
-
-  it('mCenterWithSave connect', async () =>
-    mCenterWithSave.connect().then((conn) => {
-      if (!conn) {
-        console.error('fail to connect: connectionOptions', testConnectionOptions);
-        process.exit(1);
-      }
-    }));
+    mCenterWithSave.isConnected().then((result) => expect(result).toBeTruthy()));
 
   it('mCenterWithSave notify - with save', async () => {
     [m1a, m2a, m3a, m4a, m5a].forEach((msg) =>

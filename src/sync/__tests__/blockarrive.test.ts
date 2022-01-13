@@ -6,6 +6,7 @@ import yaml from 'js-yaml';
 import rimraf from 'rimraf';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import { createFabricGateway } from '../../fabric';
+import { FabricWallet } from '../../fabric/entities';
 import { createMessageCenter } from '../../message';
 import { createQueryDb } from '../../querydb';
 import { Blocks, Commit, KeyValue, Transactions } from '../../querydb/entities';
@@ -30,7 +31,7 @@ let fabric: FabricGateway;
 let profile: ConnectionProfile;
 let queryDb: QueryDb;
 let defaultConnection: Connection;
-let testConnection: Promise<Connection>;
+let connection: Connection;
 let testConnectionOptions: ConnectionOptions;
 
 const schema = 'synctest';
@@ -45,7 +46,7 @@ const connectionOptions: ConnectionOptions = {
   logging: true,
   synchronize: false,
   dropSchema: false,
-  entities: [Blocks, Transactions, Commit, KeyValue],
+  entities: [Blocks, Transactions, Commit, KeyValue, FabricWallet],
   connectTimeoutMS: 10000,
 };
 
@@ -84,10 +85,19 @@ beforeAll(async () => {
 
   // FabricGateway
   try {
+    // use different schema for testing
+    defaultConnection = await createConnection(connectionOptions);
+    await defaultConnection.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
+    testConnectionOptions = {
+      ...connectionOptions,
+      ...{ name: schema, schema, synchronize: true, dropSchema: true },
+    };
+    connection = await createConnection(testConnectionOptions);
+
     fabric = createFabricGateway(profile, {
       adminId: process.env.ADMIN_ID,
       adminSecret: process.env.ADMIN_SECRET,
-      walletPath: process.env.WALLET,
+      connection,
       logger,
       messageCenter,
     });
@@ -98,18 +108,9 @@ beforeAll(async () => {
 
   // QueryDb
   try {
-    // use different schema for testing
-    defaultConnection = await createConnection(connectionOptions);
-    await defaultConnection.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
-    testConnectionOptions = {
-      ...connectionOptions,
-      ...{ name: schema, schema, synchronize: true, dropSchema: true },
-    };
-    testConnection = createConnection(testConnectionOptions);
-
     queryDb = createQueryDb({
       logger,
-      connection: testConnection,
+      connection,
       nonDefaultSchema: schema,
       messageCenter,
     });
@@ -141,6 +142,7 @@ afterAll(async () => {
   await synchronizer.stop();
   messageCenter.getMessagesObs().unsubscribe();
   await defaultConnection.close();
+  fabric.disconnect();
   await queryDb.disconnect();
   await waitSecond(1);
 });
@@ -154,9 +156,6 @@ describe('sync tests', () => {
     expect(isCaAdminEnrolled).toBeTruthy();
     expect(isCaAdminInWallet).toBeTruthy();
   });
-
-  it('connect queryDb', async () =>
-    queryDb.connect().then((result) => expect(result instanceof Connection).toBeTruthy()));
 
   it('initialChannelHub', async () => {
     const newBlock$ = synchronizer.getNewBlockObs();

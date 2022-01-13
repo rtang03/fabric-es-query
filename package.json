@@ -25,7 +25,7 @@
     "test:sync-dispatcher": "jest dispatcher.test",
     "test:sync-restart": "DEBUG=sync* jest restart.test",
     "test:synchronizer": "DEBUG=sync* jest synchronizer.test",
-    "test:listener": "DEBUG=sync:queue* jest listener.test",
+    "test:blockarrive": "DEBUG=sync:queue* jest blockarrive.test",
     "server": "node --require './dist/tracing.js' ./dist/app.js",
     "client": "node --experimental-modules ./dist/client.js",
     "start": "node ./dist/sync.js"

@@ -10,7 +10,7 @@ import { Incident } from './entities';
 
 export type CreateMessageCenterOptions = {
   persist?: boolean;
-  connection?: Promise<Connection>;
+  connection?: Connection;
   broadcaster?: WebSocket.Server;
   windowTime?: number;
   bufferSize?: number;
@@ -25,7 +25,6 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
   connection,
   logger,
 }) => {
-  let conn: Connection;
   let subscription: Subscription;
   const _bufferSize = bufferSize || 3;
   const _windowTime = windowTime || 10;
@@ -60,7 +59,7 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
             incident.errorstack = m.error.stack;
           }
           try {
-            const result = await conn.getRepository(Incident).save(incident);
+            const result = await connection.getRepository(Incident).save(incident);
 
             logger.info(`incident #${result.id} saved`);
           } catch (e) {
@@ -83,21 +82,9 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
       });
 
   return {
-    connect: async () => {
-      if (!persist) throw new Error('connect() is not available');
-      try {
-        logger.info('connecting database');
-        conn = await connection;
-        logger.info(`database connected`);
-        return conn;
-      } catch (e) {
-        logger.error(`fail to connect : `, e);
-        return null;
-      }
-    },
     isConnected: async () => {
       if (!persist) throw new Error('isConnected() is not available');
-      if (!conn?.isConnected) {
+      if (!connection?.isConnected) {
         logger.info(`${NS} is not connected`);
         return false;
       }
@@ -105,7 +92,7 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
     },
     disconnect: async () => {
       if (!persist) throw new Error('disconnect() is not available');
-      await conn.close();
+      await connection.close();
 
       logger.info(`${NS} disconnected`);
     },
@@ -132,12 +119,12 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
 
         Debug(`${NS}:${me}`)('query, %O', query);
 
-        const total = await conn.getRepository(Incident).count(query);
+        const total = await connection.getRepository(Incident).count(query);
 
         take && (query['take'] = take);
         skip && (query['skip'] = skip);
 
-        const items = await conn.getRepository(Incident).find(query);
+        const items = await connection.getRepository(Incident).find(query);
 
         const hasMore = skip + take < total;
         const cursor = hasMore ? skip + take : total;

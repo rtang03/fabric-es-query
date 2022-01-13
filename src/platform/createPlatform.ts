@@ -4,8 +4,9 @@ import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import winston from 'winston';
 import WebSocket from 'ws';
 import { createQueryDb } from '../querydb';
-import { Blocks, Transactions } from '../querydb/entities';
+import { Blocks, Commit, KeyValue, Transactions } from '../querydb/entities';
 import type { ConnectionProfile, FabricGateway, Platform, PlatformConfig, QueryDb } from '../types';
+import { FabricWallet } from '../fabric/entities';
 
 export type CreatePlatformOption = {
   profile: ConnectionProfile;
@@ -42,7 +43,7 @@ export const createPlatform: (option: CreatePlatformOption) => Platform = ({
     logging: true,
     synchronize: false,
     dropSchema: false,
-    entities: [Blocks, Transactions],
+    entities: [Blocks, Transactions, KeyValue, FabricWallet, Commit],
     connectTimeoutMS: 10000,
   };
   const debuggedConnection = omit(connectionOption, ['password', 'entities']);
@@ -58,8 +59,8 @@ export const createPlatform: (option: CreatePlatformOption) => Platform = ({
 
       // should connect psql
       try {
-        queryDb = createQueryDb({ connection: createConnection(connectionOption), logger });
-        connection = await queryDb.connect();
+        connection = await createConnection(connectionOption);
+        queryDb = createQueryDb({ connection, logger });
 
         if (!connection) {
           logger.error('failed connectionOption, %O', debuggedConnection);

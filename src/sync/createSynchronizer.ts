@@ -184,6 +184,7 @@ export const createSynchronizer: (
     start: async (numberOfExecution) =>
       new Promise((resolve) => {
         const broadcast = true;
+        let numberOfDispatch = 0;
 
         // emit every 15 min, or initialSyncTime
         regularSyncSubscription = merge(regularSync$, newBlock$).subscribe(({ id, timestamp }) => {
@@ -222,8 +223,11 @@ export const createSynchronizer: (
               option: { logger },
             });
 
+            numberOfDispatch++;
+
             // exit start(), when numberOfExecution reaches
-            if (numberOfExecution === id + 1) {
+            // numbeOfExecution is undefined, it will NEVER resolve
+            if (numberOfExecution === numberOfDispatch) {
               regularSyncSubscription.unsubscribe();
 
               resolve(true);

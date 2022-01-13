@@ -34,7 +34,6 @@ export type GetIncidentsByPeriodOptions = {
 };
 
 export type MessageCenter = {
-  connect?: () => Promise<Connection>;
   disconnect?: () => Promise<void>;
   isConnected?: () => Promise<boolean>;
   getInfo: () => any;

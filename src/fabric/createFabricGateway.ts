@@ -464,5 +464,6 @@ export const createFabricGateway: (
     },
     /* PARSE BLOCK DATA */
     processBlockEvent: (block) => processBlockEvent(block, logger),
+    getNetwork: () => network,
   };
 };

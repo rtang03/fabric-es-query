@@ -1,4 +1,4 @@
-export const promiseWithTimeout: <T>(
+export const withTimeout: <T>(
   promise: Promise<T>,
   ms: number,
   timeoutError?: Error

@@ -3,13 +3,14 @@ import type {
   Identity,
   DefaultEventHandlerOptions,
   DefaultQueryHandlerOptions,
+  Network,
 } from 'fabric-network';
 import type { ConnectedGatewayOptions } from 'fabric-network/lib/gateway';
 import { protos } from 'fabric-protos';
 import { Subject } from 'rxjs';
 import { Blocks, Transactions } from '../querydb/entities';
 import { SyncJob } from './Synchronizer';
-import {type TBlock } from './TBlock';
+import { type TBlock } from './TBlock';
 import ChannelQueryResponse = protos.ChannelQueryResponse;
 
 export type FabricGateway = {
@@ -29,6 +30,7 @@ export type FabricGateway = {
   getDefaultChannelName: () => string;
   initializeChannelEventHubs: (newBlock$: Subject<SyncJob>) => Promise<boolean>;
   processBlockEvent: (block: TBlock) => [Blocks, Partial<Transactions>[]];
+  getNetwork: () => Network;
 };
 
 export type FabricGatewayInfo = {

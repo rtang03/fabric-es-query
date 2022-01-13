@@ -6,7 +6,7 @@ import { KIND, MSG } from '../../message';
 import { parseWriteSet } from '../../querydb';
 import { Blocks, Commit, Transactions } from '../../querydb/entities';
 import type { FabricGateway, MessageCenter, QueryDb } from '../../types';
-import { promiseWithTimeout, waitSecond } from '../../utils';
+import { withTimeout, waitSecond } from '../../utils';
 import type { RootModel } from '.';
 
 const channelName = process.env.CHANNEL_NAME;
@@ -258,7 +258,7 @@ export const syncJob = createModel<RootModel>()({
       let unverified: number[];
       errorMsg = 'fail to find unverified blocks';
       try {
-        unverified = await promiseWithTimeout(queryDb.findUnverified(), timeout);
+        unverified = await withTimeout(queryDb.findUnverified(), timeout);
 
         Debug(NS)('step0a: unverified blocks, %s', unverified.toString());
 
@@ -284,7 +284,7 @@ export const syncJob = createModel<RootModel>()({
       for await (const blocknum of unverified) {
         errorMsg = `fail to remove unverified block ${blocknum}`;
         try {
-          removedUnverifiedBlockResult = await promiseWithTimeout(
+          removedUnverifiedBlockResult = await withTimeout(
             queryDb.removeUnverifiedBlock(blocknum),
             timeout
           );
@@ -311,7 +311,7 @@ export const syncJob = createModel<RootModel>()({
       CURRENT = 'step1';
       errorMsg = 'invalid blockheight / fabric';
       try {
-        heightFabric = await promiseWithTimeout(
+        heightFabric = await withTimeout(
           fabric.queryChannelHeight(fabric.getDefaultChannelName()),
           timeout
         );
@@ -341,7 +341,7 @@ export const syncJob = createModel<RootModel>()({
       CURRENT = 'step3';
       errorMsg = 'invalid blockheight / queydb';
       try {
-        heightQuerydb = await promiseWithTimeout(queryDb.getBlockHeight(), timeout);
+        heightQuerydb = await withTimeout(queryDb.getBlockHeight(), timeout);
 
         Debug(NS)('step 3: heightQuerydb %s', heightQuerydb);
 
@@ -358,10 +358,7 @@ export const syncJob = createModel<RootModel>()({
       CURRENT = 'step4';
       errorMsg = 'invalid missingblocks';
       try {
-        missingBlocks = await promiseWithTimeout(
-          queryDb.findMissingBlock(heightFabric + 1),
-          timeout
-        );
+        missingBlocks = await withTimeout(queryDb.findMissingBlock(heightFabric + 1), timeout);
 
         Debug(NS)('step 4: missingBlocks %O', missingBlocks);
 
@@ -412,7 +409,7 @@ export const syncJob = createModel<RootModel>()({
         CURRENT = 'step6b';
         errorMsg = 'fail to queryBlock';
         try {
-          block = await promiseWithTimeout(fabric.queryBlock(channelName, blocknum), timeout);
+          block = await withTimeout(fabric.queryBlock(channelName, blocknum), timeout);
 
           if (!block) {
             notifyMessageCenterWhenError(blocknum);
@@ -472,7 +469,7 @@ export const syncJob = createModel<RootModel>()({
         try {
           const data = new Blocks();
           data.setData(processedBlock);
-          const result = await promiseWithTimeout(queryDb.insertBlock(data), timeout);
+          const result = await withTimeout(queryDb.insertBlock(data), timeout);
 
           if (!result) {
             notifyMessageCenterWhenError(blocknum);
@@ -503,7 +500,7 @@ export const syncJob = createModel<RootModel>()({
 
             data.setData(inputTransaction);
 
-            txInserted = await promiseWithTimeout(queryDb.insertTransaction(data), timeout);
+            txInserted = await withTimeout(queryDb.insertTransaction(data), timeout);
 
             if (!txInserted) {
               notifyMessageCenterWhenError(blocknum);
@@ -563,7 +560,7 @@ export const syncJob = createModel<RootModel>()({
           CURRENT = 'step6g';
           errorMsg = 'fail to update KeyValue table';
           try {
-            const result = await promiseWithTimeout(
+            const result = await withTimeout(
               queryDb.updateInsertedBlockKeyValue(blocknum),
               timeout
             );
@@ -592,10 +589,7 @@ export const syncJob = createModel<RootModel>()({
           CURRENT = 'step6h';
           errorMsg = 'fail to verify block';
           try {
-            const result = await promiseWithTimeout(
-              queryDb.updateVerified(blocknum, true),
-              timeout
-            );
+            const result = await withTimeout(queryDb.updateVerified(blocknum, true), timeout);
 
             if (!result) {
               notifyMessageCenterWhenError(blocknum);

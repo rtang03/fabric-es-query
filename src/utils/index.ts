@@ -5,7 +5,7 @@ export * from './waitSecond';
 export * from './errors';
 export * from './createMetricServer';
 export * from './createHttpServer';
-export * from './promiseWithTimeout';
+export * from './withTimeout';
 export * from './generateToken ';
 export * from './getPaginated';
 export * from './promiseToReadFile';

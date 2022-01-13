@@ -181,20 +181,6 @@ describe('sync tests -- failure tests', () => {
     );
   });
 
-  // it('t6c.1 - syncStart: fail to processBlockEvent - reject', async () => {
-  //   fabric.processBlockEvent.mockImplementationOnce(async () =>
-  //     waitSecond(1).then(() => {
-  //       throw new Error();
-  //     })
-  //   );
-  //   return dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch(
-  //     ({ status, error }) => {
-  //       expect(status).toEqual('error');
-  //       expect(error).toEqual('fail to process block');
-  //     }
-  //   );
-  // });
-
   it('t6c.2 - syncStart: fail to processBlockEvent - null', async () => {
     fabric.processBlockEvent.mockImplementationOnce(async () => waitSecond(1).then(() => null));
 
@@ -334,12 +320,4 @@ describe('sync tests -- good tests', () => {
     dispatcher(SYNC_START, { ...option, showStateChanges: true }).then(({ status }) =>
       expect(status).toEqual('ok')
     ));
-});
-
-describe('others', () => {
-  it('syncStart will throw, when there is running job', async () =>
-    dispatcher(SYNC_START, { ...option, showStateChanges: true }).catch((error) => {
-      expect(error).toBeInstanceOf(Error);
-      expect(error.message).toEqual('fail to dispatch');
-    }));
 });

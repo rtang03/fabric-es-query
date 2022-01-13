@@ -8,7 +8,7 @@ export type FindPaginatedCommitOption = {
   sort?: 'ASC' | 'DESC';
   orderBy?: keyof Commit;
   id?: string;
-  entityName: string;
+  entityName?: string;
   commitId?: string;
   entityId?: string;
   mspId?: string;
@@ -40,12 +40,14 @@ export type QueryPagTxParseToCommitsOption = {
 };
 
 export type QueryDb = {
-  connect: () => Promise<Connection>;
+  cascadedDeleteByBlocknum: (blocknum: number) => Promise<boolean>;
+  checkIntegrity: (blocknum: number) => Promise<boolean>;
   disconnect: () => Promise<void>;
   findBlock: (option?: FindPaginatedBlockOption) => Promise<PaginatedBlock>;
   findCommit: (option: FindPaginatedCommitOption) => Promise<PaginatedCommit>;
   findMissingBlock: (maxHeight: number) => Promise<number[]>;
   findTxWithCommit: (option: FindPaginatedTransactionOption) => Promise<PaginatedTransaction>;
+  findUnverified: () => Promise<number[]>;
   getBlockHeight: () => Promise<number>;
   getTxCount: () => Promise<number>;
   insertBlock: (block: Blocks) => Promise<Blocks>;
@@ -58,8 +60,7 @@ export type QueryDb = {
   removeAllBlock?: () => Promise<boolean>;
   removeAllCommit?: () => Promise<boolean>;
   removeAllTransaction?: () => Promise<boolean>;
-  findUnverified: () => Promise<number[]>;
-  updateVerified: (blocknum: number, verified: boolean) => Promise<boolean>;
   removeUnverifiedBlock: (blocknum: number) => Promise<any>;
   updateInsertedBlockKeyValue: (blocknum: number) => Promise<any>;
+  updateVerified: (blocknum: number, verified: boolean) => Promise<boolean>;
 };

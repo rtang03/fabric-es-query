@@ -1,11 +1,10 @@
-import { KEY } from '../constants';
-
 require('dotenv').config({ path: 'src/querydb/__tests__/.env.querydb' });
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import fetch from 'isomorphic-unfetch';
 import { range } from 'lodash';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
+import { FabricWallet } from '../../fabric/entities';
 import { createMessageCenter } from '../../message';
 import type { QueryDb, MessageCenter } from '../../types';
 import {
@@ -19,6 +18,7 @@ import {
   METERS,
   waitSecond,
 } from '../../utils';
+import { KEY } from '../constants';
 import { createQueryDb } from '../createQueryDb';
 import { Blocks, Commit, Transactions, KeyValue } from '../entities';
 import { b0, b1, b10, b2, b3, b4, b5, b6, b7, b8, b9 } from './__utils__/data';
@@ -33,7 +33,7 @@ import { c1, c2 } from './__utils__/data';
 let messageCenter: MessageCenter;
 let queryDb: QueryDb;
 let defaultConnection: Connection;
-let testConnection: Promise<Connection>;
+let connection: Connection;
 let testConnectionOptions: ConnectionOptions;
 let metrics: {
   meters: Partial<Meters>;
@@ -54,7 +54,7 @@ const connectionOptions: ConnectionOptions = {
   logging: true,
   synchronize: false,
   dropSchema: false,
-  entities: [Blocks, Transactions, Commit, KeyValue],
+  entities: [Blocks, Transactions, Commit, KeyValue, FabricWallet],
   connectTimeoutMS: 10000,
 };
 
@@ -83,11 +83,11 @@ beforeAll(async () => {
       ...connectionOptions,
       ...{ name: schema, schema, synchronize: true, dropSchema: true },
     };
-    testConnection = createConnection(testConnectionOptions);
+    connection = await createConnection(testConnectionOptions);
 
     queryDb = createQueryDb({
       logger,
-      connection: testConnection,
+      connection,
       nonDefaultSchema: schema,
       meters: metrics.meters,
       messageCenter,
@@ -107,15 +107,8 @@ afterAll(async () => {
 });
 
 describe('query-db tests', () => {
-  it('isConnected', async () => queryDb.isConnected().then((result) => expect(result).toBeFalsy()));
-
-  it('connect', async () =>
-    queryDb.connect().then((conn) => {
-      if (!conn) {
-        console.error('fail to connect: connectionOptions', testConnectionOptions);
-        process.exit(1);
-      }
-    }));
+  it('isConnected', async () =>
+    queryDb.isConnected().then((result) => expect(result).toBeTruthy()));
 
   it('getBlockHeight #1: no data', async () =>
     queryDb.getBlockHeight().then((result) => expect(result).toBeNull()));
@@ -234,71 +227,85 @@ describe('query-db tests', () => {
     })
   );
 
-  // it('findUnverified', async () =>
-  //   queryDb.findUnverified().then((result) => {
-  //     console.log(result);
-  //   }));
+  it('findCommit: all', async () =>
+    queryDb.findCommit({ dev: true }).then(({ items, total, hasMore, cursor }) => {
+      expect(hasMore).toBeFalsy();
+      expect(total).toEqual(2);
+      expect(cursor).toEqual(2);
+      items.forEach((item) => expect(isCommit(item)).toBeTruthy());
+    }));
 
-  // it('findCommit: all', async () =>
-  //   queryDb.findCommit({ dev: true }).then(({ items, total, hasMore, cursor }) => {
-  //     expect(hasMore).toBeFalsy();
-  //     expect(total).toEqual(2);
-  //     expect(cursor).toEqual(2);
-  //     items.forEach((item) => expect(isCommit(item)).toBeTruthy());
-  //   }));
-  //
-  // it('findCommit: first one', async () =>
-  //   queryDb
-  //     .findCommit({ dev: true, take: 1, skip: 0 })
-  //     .then(({ items, total, hasMore, cursor }) => {
-  //       expect(hasMore).toBeTruthy();
-  //       expect(total).toEqual(2);
-  //       expect(cursor).toEqual(1);
-  //       items.forEach((item) => expect(isCommit(item)).toBeTruthy());
-  //     }));
+  it('findCommit: first one', async () =>
+    queryDb
+      .findCommit({ dev: true, take: 1, skip: 0 })
+      .then(({ items, total, hasMore, cursor }) => {
+        expect(hasMore).toBeTruthy();
+        expect(total).toEqual(2);
+        expect(cursor).toEqual(1);
+        items.forEach((item) => expect(isCommit(item)).toBeTruthy());
+      }));
 
-  // it('fail to findCommit: by entityName', async () =>
-  //   queryDb
-  //     .findCommit({ entityName: 'abcdef' })
-  //     .then((result) => expect(result).toEqual(noResult)));
-  //
-  // it('findCommit: by entityName', async () =>
-  //   queryDb.findCommit({ entityName: 'dev_entity' }).then(({ items, total, hasMore, cursor }) => {
-  //     expect(hasMore).toBeFalsy();
-  //     expect(total).toEqual(2);
-  //     expect(cursor).toEqual(2);
-  //     items.forEach((item) => expect(isCommit(item)).toBeTruthy());
-  //   }));
+  it('fail to findCommit: by entityName', async () =>
+    queryDb
+      .findCommit({ entityName: 'abcdef' })
+      .then((result) => expect(result).toEqual(noResult)));
 
-  // it('fail to findCommit: by entityName, entityId', async () =>
-  //   queryDb
-  //     .findCommit({ entityName: 'dev_entity', entityId: 'abcdef' })
-  //     .then((result) => expect(result).toEqual(noResult)));
+  it('findCommit: by entityName', async () =>
+    queryDb.findCommit({ entityName: 'dev_entity' }).then(({ items, total, hasMore, cursor }) => {
+      expect(hasMore).toBeFalsy();
+      expect(total).toEqual(2);
+      expect(cursor).toEqual(2);
+      items.forEach((item) => expect(isCommit(item)).toBeTruthy());
+    }));
 
-  // it('findCommit: by entityName, entityId', async () =>
-  //   queryDb
-  //     .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123' })
-  //     .then(({ items, hasMore, cursor, total }) => {
-  //       expect(hasMore).toBeFalsy();
-  //       expect(total).toEqual(2);
-  //       expect(cursor).toEqual(2);
-  //       items.forEach((item) => expect(isCommit(item)).toBeTruthy());
-  //     }));
+  it('fail to findCommit: by entityName, entityId', async () =>
+    queryDb
+      .findCommit({ entityName: 'dev_entity', entityId: 'abcdef' })
+      .then((result) => expect(result).toEqual(noResult)));
 
-  // it('fail to findCommit: by entityName, entityId, commitId', async () =>
-  //   queryDb
-  //     .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123', commitId: '1000' })
-  //     .then((result) => expect(result).toEqual(noResult)));
+  it('findCommit: by entityName, entityId', async () =>
+    queryDb
+      .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123' })
+      .then(({ items, hasMore, cursor, total }) => {
+        expect(hasMore).toBeFalsy();
+        expect(total).toEqual(2);
+        expect(cursor).toEqual(2);
+        items.forEach((item) => expect(isCommit(item)).toBeTruthy());
+      }));
 
-  // it('findCommit: by entityName, entityId, commitId', async () =>
-  //   queryDb
-  //     .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123', commitId: '1' })
-  //     .then(({ items, total, hasMore, cursor }) => {
-  //       expect(hasMore).toBeFalsy();
-  //       expect(total).toEqual(1);
-  //       expect(cursor).toEqual(1);
-  //       items.forEach((item) => expect(isCommit(item)).toBeTruthy());
-  //     }));
+  it('fail to findCommit: by entityName, entityId, commitId', async () =>
+    queryDb
+      .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123', commitId: '1000' })
+      .then((result) => expect(result).toEqual(noResult)));
+
+  it('findCommit: by entityName, entityId, commitId', async () =>
+    queryDb
+      .findCommit({ entityName: 'dev_entity', entityId: 'ent_id_123', commitId: '1' })
+      .then(({ items, total, hasMore, cursor }) => {
+        expect(hasMore).toBeFalsy();
+        expect(total).toEqual(1);
+        expect(cursor).toEqual(1);
+        items.forEach((item) => expect(isCommit(item)).toBeTruthy());
+      }));
+
+  range(11).forEach((blocknum) =>
+    it(`check integrity - ${blocknum}`, async () =>
+      queryDb.checkIntegrity(blocknum).then((result) => expect(result).toBeTruthy()))
+  );
+
+  // block #6 is no commit
+  it('cascade delete - block 6', async () =>
+    queryDb.cascadedDeleteByBlocknum(6).then((result) => expect(result).toBeTruthy()));
+
+  it(`check integrity - block 6`, async () =>
+    queryDb.checkIntegrity(6).then((result) => expect(result).toBeFalsy()));
+
+  // block #7 includes commit
+  it('cascade delete - block 7', async () =>
+    queryDb.cascadedDeleteByBlocknum(7).then((result) => expect(result).toBeTruthy()));
+
+  it(`check integrity - block 7`, async () =>
+    queryDb.checkIntegrity(7).then((result) => expect(result).toBeFalsy()));
 
   // it('validate with metric server', async () => {
   //   await waitForSecond(2);
