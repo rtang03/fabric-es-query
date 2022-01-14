@@ -10,7 +10,6 @@ import {
   type Identity,
   type Network,
   Wallet,
-  Wallets,
   type X509Identity,
   DefaultEventHandlerStrategies,
   DefaultQueryHandlerStrategies,
@@ -82,7 +81,10 @@ export const createFabricGateway: (
   if (!caName || !caUrl || !caAdminId || !caAdminSecret || !mspId || !defaultChannel)
     throw new Error('fail to load connection profile');
 
-  /* === GET USER CONTEXT === */
+  /**
+   * getUserContext
+   * @param user
+   */
   const getUserContext = async (user: string) => {
     const identity = await wallet.get(user);
 
@@ -92,9 +94,12 @@ export const createFabricGateway: (
       ? wallet.getProviderRegistry().getProvider(identity.type).getUserContext(identity, user)
       : null;
   };
-  /* END */
 
-  /* === ENROLL AND SAVE TO WALLET === */
+  /**
+   * enrollAndSave
+   * @param enrollmentID
+   * @param enrollmentSecret
+   */
   const enrollAndSave = async (
     enrollmentID: string,
     enrollmentSecret: string
@@ -127,9 +132,11 @@ export const createFabricGateway: (
 
     return enrollment;
   };
-  /* END */
 
-  /* === RETRIEVE TLSCA PEM === */
+  /**
+   * getTlsCACertsPem
+   * @param ca
+   */
   const getTlsCACertsPem = (ca: string): string => {
     logger.info(`getTlsCACertsPem: ${ca}`);
 
@@ -145,9 +152,11 @@ export const createFabricGateway: (
       ? tlsCACerts.pem
       : fs.readFileSync(path.join(process.cwd(), tlsCACerts.path), 'utf8');
   };
-  /* END */
 
-  /* === ENROLL CA === */
+  /**
+   * enrollCaIdentity
+   * @param id
+   */
   const enrollCaIdentity = async (id) => {
     logger.info(`enrollCaIdentity ${id} - caName: ${caName}, caUrl ${caUrl}`);
 
@@ -162,11 +171,48 @@ export const createFabricGateway: (
     isCaAdminEnrolled = true;
     isCaAdminInWallet = true;
   };
-  /* END */
 
   return {
+    /**
+     * disconnect
+     */
+    disconnect: () => {
+      gateway.disconnect();
+    },
+    /**
+     * getDefaultChannelName
+     */
     getDefaultChannelName: () => defaultChannel,
-    /* INFO */
+    /**
+     * getIdentityInfo
+     * @param label
+     */
+    getIdentityInfo: async (label) => {
+      const me = 'getIdentityInfo';
+      logger.info(`=== ${me}() ===`);
+
+      try {
+        const result: any = await wallet.get(label);
+
+        if (!result) return null;
+
+        const identity = {
+          type: result?.type,
+          mspId: result?.mspId,
+          credentials: { certificate: result?.credentials?.certificate },
+        };
+
+        Debug(`${NS}:${me}`)('result, %O', identity);
+
+        return identity;
+      } catch (e) {
+        logger.error(`fail to getIdentityInfo ${label} : `, e);
+        return null;
+      }
+    },
+    /**
+     * getInfo
+     */
     getInfo: () => {
       const me = 'getInfo()';
       const debugL2 = Debug(`${NS}:${me}`);
@@ -197,7 +243,11 @@ export const createFabricGateway: (
       return info;
     },
     /**
-     * initialize()
+     * getNetwork
+     */
+    getNetwork: () => network,
+    /**
+     * initialize
      * - configure EventHandlerStrategies and QueryHandlerStrategies
      * - enroll (not register) CA admin
      * - enroll (not register) organizational admin
@@ -287,124 +337,9 @@ export const createFabricGateway: (
       }
     },
     /**
-     * registerNewUser()
-     * @param enrollmentID
-     * @param enrollmentSecret
+     * initializeChannelEventHubs
+     * @param newBlock$
      */
-    registerNewUser: async (enrollmentID, enrollmentSecret) => {
-      const me = 'registerNewUser';
-      logger.info(`=== ${me}() ===`);
-
-      try {
-        caAdminUserContext = await getUserContext(caAdminId);
-
-        await ca.register(
-          { affiliation: '', enrollmentID, enrollmentSecret, role: 'client' },
-          caAdminUserContext
-        );
-
-        logger.info(`ca.register new ${enrollmentID} complete`);
-
-        return true;
-      } catch (e) {
-        logger.error(`fail to register new user ${enrollmentID} : `, e);
-        return null;
-      }
-    },
-    /* DISCONNECT */
-    disconnect: () => {
-      gateway.disconnect();
-    },
-    /* IDENTITY INFO */
-    getIdentityInfo: async (label) => {
-      const me = 'getIdentityInfo';
-      logger.info(`=== ${me}() ===`);
-
-      try {
-        const result: any = await wallet.get(label);
-
-        if (!result) return null;
-
-        const identity = {
-          type: result?.type,
-          mspId: result?.mspId,
-          credentials: { certificate: result?.credentials?.certificate },
-        };
-
-        Debug(`${NS}:${me}`)('result, %O', identity);
-
-        return identity;
-      } catch (e) {
-        logger.error(`fail to getIdentityInfo ${label} : `, e);
-        return null;
-      }
-    },
-    /* QUERY CHANNEL */
-    queryChannels: async () => {
-      const me = 'queryChannels';
-      logger.info(`=== ${me}() ===`);
-
-      try {
-        const contract = network.getContract('cscc');
-        const result = await contract.evaluateTransaction('GetChannels');
-        const resultJson = fabprotos.protos.ChannelQueryResponse.decode(result);
-
-        Debug(`${NS}:${me}`)('result: %O', resultJson);
-
-        return resultJson;
-      } catch (e) {
-        logger.error(`fail to queryChannels: `, e);
-        return null;
-      }
-    },
-    /* QUERY BLOCK */
-    queryBlock: async (channelName, blockNum) => {
-      const me = 'queryBlock';
-      logger.info(`=== ${me}() ===`);
-
-      try {
-        const contract = network.getContract('qscc');
-        const resultByte = await contract.evaluateTransaction(
-          'GetBlockByNumber',
-          channelName,
-          String(blockNum)
-        );
-        const resultJson = BlockDecoder.decode(resultByte);
-
-        Debug(`${NS}:${me}`)('result, %O', resultJson);
-
-        meters?.queryBlockCount.add(1);
-
-        return resultJson;
-      } catch (e) {
-        logger.error(`Failed to get block ${blockNum} from channel ${channelName} : `, e);
-        return null;
-      }
-    },
-    /* QUERY CHAIN HEIGHT */
-    queryChannelHeight: async (channelName) => {
-      const me = 'queryChannelHeight';
-      logger.info(`=== ${me}() ===`);
-
-      try {
-        const contract = network.getContract('qscc');
-        const resultByte = await contract.evaluateTransaction('GetChainInfo', channelName);
-        const resultJson: any = fabprotos.common.BlockchainInfo.decode(resultByte);
-
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        const height = resultJson?.height?.low && parseInt(resultJson.height.low, 10) - 1;
-
-        mCenter?.notify({ kind: KIND.INFO, title: MSG.CHANNEL_HEIGHT, data: height });
-
-        Debug(`${NS}:${me}`)('result, %O', resultJson);
-
-        return resultJson?.height?.low ? height : null;
-      } catch (e) {
-        logger.error(`fail to queryChannelHeight`);
-        return null;
-      }
-    },
-    /* INITIALIZE CHANNEL EVENT HUBS */
     initializeChannelEventHubs: async (newBlock$: Subject<SyncJob>) => {
       const me = 'initializeChannelEventHubs';
       const save = true;
@@ -462,8 +397,109 @@ export const createFabricGateway: (
       }
       return true;
     },
-    /* PARSE BLOCK DATA */
+    /**
+     * processBlockEvent
+     * @param block
+     */
     processBlockEvent: (block) => processBlockEvent(block, logger),
-    getNetwork: () => network,
+    /**
+     * queryBlock
+     * @param channelName
+     * @param blockNum
+     */
+    queryBlock: async (channelName, blockNum) => {
+      const me = 'queryBlock';
+      logger.info(`=== ${me}() ===`);
+
+      try {
+        const contract = network.getContract('qscc');
+        const resultByte = await contract.evaluateTransaction(
+          'GetBlockByNumber',
+          channelName,
+          String(blockNum)
+        );
+        const resultJson = BlockDecoder.decode(resultByte);
+
+        Debug(`${NS}:${me}`)('result, %O', resultJson);
+
+        meters?.queryBlockCount.add(1);
+
+        return resultJson;
+      } catch (e) {
+        logger.error(`Failed to get block ${blockNum} from channel ${channelName} : `, e);
+        return null;
+      }
+    },
+    /**
+     * queryChannelHeight
+     * @param channelName
+     */
+    queryChannelHeight: async (channelName) => {
+      const me = 'queryChannelHeight';
+      logger.info(`=== ${me}() ===`);
+
+      try {
+        const contract = network.getContract('qscc');
+        const resultByte = await contract.evaluateTransaction('GetChainInfo', channelName);
+        const resultJson: any = fabprotos.common.BlockchainInfo.decode(resultByte);
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        const height = resultJson?.height?.low && parseInt(resultJson.height.low, 10) - 1;
+
+        mCenter?.notify({ kind: KIND.INFO, title: MSG.CHANNEL_HEIGHT, data: height });
+
+        Debug(`${NS}:${me}`)('result, %O', resultJson);
+
+        return resultJson?.height?.low ? height : null;
+      } catch (e) {
+        logger.error(`fail to queryChannelHeight`);
+        return null;
+      }
+    },
+    /**
+     * queryChannels
+     */
+    queryChannels: async () => {
+      const me = 'queryChannels';
+      logger.info(`=== ${me}() ===`);
+
+      try {
+        const contract = network.getContract('cscc');
+        const result = await contract.evaluateTransaction('GetChannels');
+        const resultJson = fabprotos.protos.ChannelQueryResponse.decode(result);
+
+        Debug(`${NS}:${me}`)('result: %O', resultJson);
+
+        return resultJson;
+      } catch (e) {
+        logger.error(`fail to queryChannels: `, e);
+        return null;
+      }
+    },
+    /**
+     * registerNewUser
+     * @param enrollmentID
+     * @param enrollmentSecret
+     */
+    registerNewUser: async (enrollmentID, enrollmentSecret) => {
+      const me = 'registerNewUser';
+      logger.info(`=== ${me}() ===`);
+
+      try {
+        caAdminUserContext = await getUserContext(caAdminId);
+
+        await ca.register(
+          { affiliation: '', enrollmentID, enrollmentSecret, role: 'client' },
+          caAdminUserContext
+        );
+
+        logger.info(`ca.register new ${enrollmentID} complete`);
+
+        return true;
+      } catch (e) {
+        logger.error(`fail to register new user ${enrollmentID} : `, e);
+        return null;
+      }
+    },
   };
 };

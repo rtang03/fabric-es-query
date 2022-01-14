@@ -28,7 +28,7 @@ export type AppendCommitPayload<TEvent> = {
   events: TEvent[];
 };
 
-export type Repository<TEntity = any, TOutputEntity = any, TEvent = any> = {
+export type Repository<TEvent = any> = {
   cmd_append: (
     payload: AppendCommitPayload<TEvent>,
     isPrivateData?: boolean

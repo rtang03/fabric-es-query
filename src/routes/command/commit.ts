@@ -1,9 +1,9 @@
+import Debug from 'debug';
 import Status from 'http-status';
 import winston from 'winston';
-import { Repository } from '../../types';
+import type { Repository } from '../../types';
 import { createRestRoute } from '../../utils';
 import { MSG } from '../constants';
-import Debug from 'debug';
 
 type RouterOption = {
   repo: Repository;

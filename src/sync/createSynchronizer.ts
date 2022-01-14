@@ -7,6 +7,7 @@ import WebSocket from 'ws';
 import { KIND, MSG } from '../message';
 import type { FabricGateway, MessageCenter, QueryDb, Synchronizer, SyncJob } from '../types';
 import { type Meters, waitSecond } from '../utils';
+import { SYNC_ALL_BLOCKS } from './constants';
 import { dispatcher, type DispatcherResult } from './dispatcher';
 import { store } from './store';
 
@@ -22,6 +23,7 @@ export type CreateSynchronizerOption = {
   meters?: Partial<Meters>;
   tracer?: Tracer;
   messageCenter?: MessageCenter;
+  initialMaxSyncHeight?: number;
   dev?: boolean; // if true, no job dispatching
 };
 
@@ -38,6 +40,7 @@ export type CreateSynchronizerOption = {
  * @param initialTimeoutMs
  * @param initialShowStateChanges
  * @param mCenter
+ * @param initialMaxSyncHeight
  */
 export const createSynchronizer: (
   initialSyncTime: number,
@@ -55,11 +58,11 @@ export const createSynchronizer: (
     initialTimeoutMs,
     initialShowStateChanges,
     messageCenter: mCenter,
+    initialMaxSyncHeight,
   }
 ) => {
   // interval for checking job queue
   const executionInterval = 1;
-  // used for Debug
   const NS = 'sync';
   const LAST_JOB = -1;
   const SYNC_START = { type: 'syncJob/syncStart' };
@@ -77,19 +80,26 @@ export const createSynchronizer: (
   let regularSync$ = interval(syncTime * 1000).pipe(syncJobMap);
   let executionSubscription: Subscription;
   let regularSyncSubscription: Subscription;
+  let maxSyncHeight = initialMaxSyncHeight || SYNC_ALL_BLOCKS;
 
   logger.info('Preparing synchronizer');
   logger.info(`syncTime: ${initialSyncTime}`);
+  logger.info(`maxSyncHeight: ${maxSyncHeight}`);
   logger.info(`timeout: ${initialTimeoutMs}`);
   logger.info(`showStateChanges: ${initialShowStateChanges}`);
   logger.info(`persist: ${persist}`);
   logger.info(`broadcaster: ${!!broadcaster}`);
 
-  const performAction: (payload, option?) => Promise<DispatcherResult> = dev
+  /**
+   * perform
+   */
+  const perform: (
+    payload,
+    option?: { timeout: number; showStateChanges: boolean; maxSyncHeight?: number }
+  ) => Promise<DispatcherResult> = dev
     ? async (payload) => {
-        // dummy implementation
+        // dummy implementation for dev/test
         console.log('test-', payload);
-
         return { status: 'ok', error: null };
       }
     : async (payload, option) => {
@@ -99,6 +109,7 @@ export const createSynchronizer: (
           logger,
           messageCenter: mCenter,
           timeout: option?.timeout || initialTimeoutMs,
+          maxSyncHeight: option.maxSyncHeight,
           showStateChanges:
             option?.showStateChanges === undefined
               ? initialShowStateChanges
@@ -113,6 +124,9 @@ export const createSynchronizer: (
       };
 
   return {
+    /**
+     * connect
+     */
     connect: async () => {
       // sync connection
       if (!persist) throw new Error('connect() is not available');
@@ -129,6 +143,46 @@ export const createSynchronizer: (
         return null;
       }
     },
+    /**
+     * disconnect
+     */
+    disconnect: async () => {
+      if (!persist) throw new Error('disconnectSyncDb() is not available');
+
+      await conn.close();
+      logger.info(`${NS} disconnectSyncDb`);
+    },
+    /**
+     * getInfo
+     */
+    getInfo: () => ({ persist, syncTime, currentJob, timeout, showStateChanges, maxSyncHeight }),
+    /**
+     * getNewBlockObs
+     */
+    getNewBlockObs: () => newBlock$,
+    /**
+     * isBackendsReady
+     */
+    isBackendsReady: async () => {
+      try {
+        const heightFabric = await fabric.queryChannelHeight(fabric.getDefaultChannelName());
+
+        Debug(`${NS}:isBackendsReady`)('heightFabric: %s', heightFabric);
+
+        if (!heightFabric || !Number.isInteger(heightFabric)) {
+          logger.info(`block height /fabric: ${heightFabric}`);
+          return false;
+        }
+        // cannot use heightQuery, as a checking criteria. Because QueryDb is empty, when before any shnc.
+        return await queryDb.isConnected();
+      } catch (e) {
+        logger.error(`fail to isBackendsReady : `, e);
+        return null;
+      }
+    },
+    /**
+     * isConnected
+     */
     isConnected: async () => {
       if (!persist) throw new Error('isConnected() is not available');
 
@@ -138,49 +192,19 @@ export const createSynchronizer: (
       }
       return true;
     },
-    disconnect: async () => {
-      if (!persist) throw new Error('disconnectSyncDb() is not available');
-
-      await conn.close();
-      logger.info(`${NS} disconnectSyncDb`);
-    },
-    getInfo: () => ({ persist, syncTime, currentJob, timeout, showStateChanges }),
+    /**
+     * isSyncJobActive
+     */
     isSyncJobActive: () => regularSyncSubscription.closed,
-    stopAndChangeRequestTimeout: (t) => {
-      stop$.next({ id: LAST_JOB });
-      timeout = t;
-
-      regularSyncSubscription.unsubscribe();
-      executionSubscription.unsubscribe();
-
-      mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
-
-      logger.info(`🛑  change requestTimeout: ${t}`);
-    },
-    stopAndChangeShowStateChanges: (s) => {
-      stop$.next({ id: LAST_JOB });
-      showStateChanges = s;
-
-      regularSyncSubscription.unsubscribe();
-      executionSubscription.unsubscribe();
-
-      mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
-
-      logger.info(`🛑  change requestTimeout: ${s}`);
-    },
-    stopAndChangeSyncTime: (t) => {
-      stop$.next({ id: LAST_JOB });
-      syncTime = t;
-
-      regularSyncSubscription.unsubscribe();
-      executionSubscription.unsubscribe();
-
-      mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
-
-      logger.info(`🛑  change syncTime: ${t}`);
-
-      regularSync$ = interval(t * 1000).pipe(syncJobMap);
-    },
+    /**
+     * setMaxSyncHeight
+     * @param maxHeight
+     */
+    setMaxSyncHeight: (maxHeight) => (maxSyncHeight = maxHeight),
+    /**
+     * start
+     * @param numberOfExecution
+     */
     start: async (numberOfExecution) =>
       new Promise((resolve) => {
         const broadcast = true;
@@ -217,9 +241,12 @@ export const createSynchronizer: (
           if (!workInProgress && ~~queued.length) {
             Debug(NS)(`queued job found; dispatch ${currentJob}`);
 
+            const option = { timeout, showStateChanges };
+            maxSyncHeight !== SYNC_ALL_BLOCKS && (option['maxSyncHeight'] = maxSyncHeight);
+
             // dispatch once
             await store.dispatch.queue.dispatchSyncJob({
-              action: performAction(currentJob, { timeout, showStateChanges }),
+              action: perform(currentJob, option),
               option: { logger },
             });
 
@@ -240,6 +267,9 @@ export const createSynchronizer: (
           mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast });
         });
       }),
+    /**
+     * stop
+     */
     stop: async () => {
       stop$.next({ id: LAST_JOB });
 
@@ -250,23 +280,67 @@ export const createSynchronizer: (
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
     },
-    isBackendsReady: async () => {
-      try {
-        const heightFabric = await fabric.queryChannelHeight(fabric.getDefaultChannelName());
+    /**
+     * stopAndChangeRequestTimeout
+     * @param t
+     */
+    stopAndChangeRequestTimeout: (t) => {
+      stop$.next({ id: LAST_JOB });
+      timeout = t;
 
-        Debug(`${NS}:isBackendsReady`)('heightFabric: %s', heightFabric);
+      regularSyncSubscription.unsubscribe();
+      executionSubscription.unsubscribe();
 
-        if (!heightFabric || !Number.isInteger(heightFabric)) {
-          logger.info(`block height /fabric: ${heightFabric}`);
-          return false;
-        }
-        // cannot use heightQuery, as a checking criteria. Because QueryDb is empty, when before any shnc.
-        return await queryDb.isConnected();
-      } catch (e) {
-        logger.error(`fail to isBackendsReady : `, e);
-        return null;
-      }
+      mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
+
+      logger.info(`🛑  change requestTimeout: ${t}`);
     },
-    getNewBlockObs: () => newBlock$,
+    /**
+     * stopAndChangeShowStateChanges
+     * @param s
+     */
+    stopAndChangeShowStateChanges: (s) => {
+      stop$.next({ id: LAST_JOB });
+      showStateChanges = s;
+
+      regularSyncSubscription.unsubscribe();
+      executionSubscription.unsubscribe();
+
+      mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
+
+      logger.info(`🛑  change requestTimeout: ${s}`);
+    },
+    /**
+     * stopAndChangeSyncTime
+     * @param t
+     */
+    stopAndChangeSyncTime: (t) => {
+      stop$.next({ id: LAST_JOB });
+      syncTime = t;
+
+      regularSyncSubscription.unsubscribe();
+      executionSubscription.unsubscribe();
+
+      mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
+
+      logger.info(`🛑  change syncTime: ${t}`);
+
+      regularSync$ = interval(t * 1000).pipe(syncJobMap);
+    },
+    /**
+     * syncBlocksByEntityName
+     * @param entityName
+     */
+    syncBlocksByEntityName: async (entityName) => {
+      return Promise.reject('Not yet implemented');
+    },
+    /**
+     * syncBlocksByEntityNameEntityId
+     * @param entityName
+     * @param entityId
+     */
+    syncBlocksByEntityNameEntityId: async (entityName, entityId) => {
+      return Promise.reject('Not yet implemented');
+    },
   };
 };

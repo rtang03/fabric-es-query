@@ -119,6 +119,7 @@ beforeAll(async () => {
       fabric,
       queryDb,
       logger,
+      initialMaxSyncHeight: 10,
     });
   } catch {
     console.error('fail to createFabricGateway');

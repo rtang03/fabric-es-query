@@ -1,12 +1,11 @@
 import { createModel } from '@rematch/core';
 import Debug from 'debug';
 import { isEqual, range, takeRight, tail } from 'lodash';
-import winston from 'winston';
 import { KIND, MSG } from '../../message';
 import { parseWriteSet } from '../../querydb';
 import { Blocks, Commit, Transactions } from '../../querydb/entities';
-import type { FabricGateway, MessageCenter, QueryDb } from '../../types';
 import { withTimeout, waitSecond } from '../../utils';
+import type { TAction } from '../dispatcher';
 import type { RootModel } from '.';
 
 const channelName = process.env.CHANNEL_NAME;
@@ -26,6 +25,7 @@ type SyncJobState = {
   error?: any;
   maxHeightFabric?: number;
   maxHeightQuery?: number;
+  maxSyncHeight?: number;
   missingBlocks?: number[];
   validated?: boolean;
   queued?: number[];
@@ -35,18 +35,6 @@ type SyncJobState = {
   blockHasNoCommit?: number[];
   unverifiedBlockFound?: number[];
   unverifiedBlockDeleted?: number[];
-};
-
-export type TArgs = {
-  tx_id: string;
-  action?: Promise<any>;
-  option?: {
-    timeout?: number;
-    fabric?: FabricGateway;
-    queryDb?: QueryDb;
-    messageCenter?: MessageCenter;
-    logger?: winston.Logger;
-  };
 };
 
 const TEMPLATE: SyncJobState = {
@@ -61,6 +49,7 @@ const TEMPLATE: SyncJobState = {
   error: null,
   maxHeightFabric: null,
   maxHeightQuery: null,
+  maxSyncHeight: null,
   missingBlocks: null,
   validated: null,
   completed: [],
@@ -80,10 +69,13 @@ const NS = 'sync';
 export const syncJob = createModel<RootModel>()({
   state: TEMPLATE as SyncJobState,
   reducers: {
-    reset: (state, [tx_id, alias]: [tx_id: string, alias?: string]) => ({
-      ...TEMPLATE,
-      tx_id,
+    failed: (state, [error, alias]: [error: any, alias?: string]) => ({
+      ...state,
       alias,
+      status: 'error',
+      error: error.message,
+      lastModified: new Date(),
+      running: false,
     }),
     init: (state, [tx_id, alias]: [tx_id: string, alias?: string]) => {
       const startTime = new Date();
@@ -98,6 +90,11 @@ export const syncJob = createModel<RootModel>()({
         status: 'active' as TStatus,
       };
     },
+    reset: (state, [tx_id, alias]: [tx_id: string, alias?: string]) => ({
+      ...TEMPLATE,
+      tx_id,
+      alias,
+    }),
     setAlias: (state, alias: string) => ({
       ...state,
       alias,
@@ -113,12 +110,6 @@ export const syncJob = createModel<RootModel>()({
       ...state,
       alias,
       blockHasNoCommit: [...state.blockHasNoCommit, blocknum],
-      lastModified: new Date(),
-    }),
-    setQueued: (state, [queued, alias]: [queued: any, alias?: string]) => ({
-      ...state,
-      alias,
-      queued,
       lastModified: new Date(),
     }),
     setFailed: (state, [failed, alias]: [failed: number, alias?: string]) => ({
@@ -157,6 +148,12 @@ export const syncJob = createModel<RootModel>()({
       maxHeightQuery,
       lastModified: new Date(),
     }),
+    setMaxSyncHeight: (state, [maxSyncHeight, alias]) => ({
+      ...state,
+      alias,
+      maxSyncHeight,
+      lastModified: new Date(),
+    }),
     setMissingBlocks: (
       state,
       [missingBlocks, alias]: [missingBlocks: number[], alias?: string]
@@ -166,10 +163,10 @@ export const syncJob = createModel<RootModel>()({
       missingBlocks,
       lastModified: new Date(),
     }),
-    setValidated: (state, [validated, alias]: [validated: boolean, alias?: string]) => ({
+    setQueued: (state, [queued, alias]: [queued: any, alias?: string]) => ({
       ...state,
       alias,
-      validated,
+      queued,
       lastModified: new Date(),
     }),
     setStatus: (state, [status, alias]: [status: TStatus, alias?: string]) => ({
@@ -194,30 +191,29 @@ export const syncJob = createModel<RootModel>()({
       unverifiedBlockDeleted: [...state.unverifiedBlockDeleted, blocknum],
       lastModified: new Date(),
     }),
-    failed: (state, [error, alias]: [error: any, alias?: string]) => ({
+    setValidated: (state, [validated, alias]: [validated: boolean, alias?: string]) => ({
       ...state,
       alias,
-      status: 'error',
-      error: error.message,
+      validated,
       lastModified: new Date(),
-      running: false,
     }),
   },
   effects: (dispatch) => ({
-    wait5Second: async (payload: TArgs) => {
+    wait5Second: async (payload: TAction['payload']) => {
       dispatch.syncJob.init([payload.tx_id, 'step1:init']);
       await waitSecond(5);
       dispatch.syncJob.setStatus(['ok', 'step2:setStatus(ok)']);
       dispatch.syncJob.reset([payload.tx_id, 'step99:result']);
       return true;
     },
-    syncStart: async (payload: TArgs) => {
+    syncStart: async (payload: TAction['payload']) => {
       const me = 'syncStart';
       const logger = payload?.option?.logger;
       const fabric = payload?.option?.fabric;
       const queryDb = payload?.option?.queryDb;
       const mCenter = payload?.option?.messageCenter;
       const timeout = payload?.option?.timeout || 10000;
+      const maxSyncHeight = payload?.option?.maxSyncHeight;
       const notifyMessageCenterWhenError = (blocknum: number) =>
         mCenter?.notify({
           kind: KIND.ERROR,
@@ -257,6 +253,7 @@ export const syncJob = createModel<RootModel>()({
       let CURRENT = 'step0a';
       let unverified: number[];
       errorMsg = 'fail to find unverified blocks';
+
       try {
         unverified = await withTimeout(queryDb.findUnverified(), timeout);
 
@@ -315,6 +312,16 @@ export const syncJob = createModel<RootModel>()({
           fabric.queryChannelHeight(fabric.getDefaultChannelName()),
           timeout
         );
+
+        Debug(NS)(`current heightFabric: ${heightFabric}`);
+        Debug(NS)(`configured maxSyncHeight: ${maxSyncHeight}`);
+
+        // do syncJob, up to maxSyncHeight
+        if (maxSyncHeight && heightFabric >= maxSyncHeight) {
+          heightFabric = maxSyncHeight;
+
+          dispatch.syncJob.setMaxSyncHeight([maxSyncHeight, `${CURRENT}:setMaxSyncHeight`]);
+        }
 
         Debug(NS)('step1: heightFabric %s', heightFabric);
 

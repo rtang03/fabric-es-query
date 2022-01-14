@@ -8,6 +8,7 @@ import { store } from './store';
 
 export type DispatcherResult = { status: string; data?: any; error?: any };
 
+// dependency is passed as an option
 export type TAction = {
   type: string;
   payload: {
@@ -18,6 +19,7 @@ export type TAction = {
       queryDb?: Partial<QueryDb>;
       messageCenter?: MessageCenter;
       timeout?: number;
+      maxSyncHeight?: number;
     };
   };
 };

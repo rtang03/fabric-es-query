@@ -1,9 +1,9 @@
+import util from 'util';
 import Debug from 'debug';
 import winston from 'winston';
 import { evaluate, submit, submitPrivateData } from '../fabric';
 import type { FabricGateway, MessageCenter, QueryDb, Repository, RepoResponse } from '../types';
 import { withTimeout } from '../utils';
-import util from 'util';
 
 export type CreateRepositoryOption = {
   fabric: FabricGateway;
@@ -24,10 +24,13 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
   const NS = 'repo';
 
   logger.info('Preparing repository');
+  logger.info(`fabric: ${!!fabric}`);
+  logger.info(`queryDb: ${queryDb.isConnected()}`);
+  logger.info(`request timeout (ms): ${timeoutMs}`);
 
   const catchError = async (me: string, fcn: (fcnName?: string) => Promise<RepoResponse>) => {
     try {
-      await fcn(me);
+      return await fcn(me);
     } catch (error) {
       logger.error(`fail to ${me} : `, error);
 
@@ -42,6 +45,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param entityName
      * @param id
      * @param events
+     * @param isPrivateData
      */
     cmd_append: ({ entityName, id, events }, isPrivateData) =>
       isPrivateData

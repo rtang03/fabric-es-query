@@ -35,12 +35,12 @@ export type GetIncidentsByPeriodOptions = {
 
 export type MessageCenter = {
   disconnect?: () => Promise<void>;
-  isConnected?: () => Promise<boolean>;
-  getInfo: () => any;
-  subscribe: <T = any>(observer: Partial<Observer<Message<T>>>) => Subscription;
-  getMessagesObs: () => ReplaySubject<Message>;
-  notify: <T = any>(message: Message<T>) => void;
-  getSubscription: () => Subscription;
   getIncidents: (option?: GetIncidentsOptions) => Promise<PaginatedIncident>;
   getIncidentsByPeriod?: (option?: GetIncidentsByPeriodOptions) => Promise<PaginatedIncident>;
+  getInfo: () => any;
+  getMessagesObs: () => ReplaySubject<Message>;
+  getSubscription: () => Subscription;
+  isConnected?: () => Promise<boolean>;
+  notify: <T = any>(message: Message<T>) => void;
+  subscribe: <T = any>(observer: Partial<Observer<Message<T>>>) => Subscription;
 };

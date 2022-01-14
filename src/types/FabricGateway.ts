@@ -14,23 +14,23 @@ import { type TBlock } from './TBlock';
 import ChannelQueryResponse = protos.ChannelQueryResponse;
 
 export type FabricGateway = {
+  disconnect: () => void;
+  getDefaultChannelName: () => string;
+  getIdentityInfo: (label: string) => Promise<Identity & { credentials: { certificate } }>;
   getInfo: () => FabricGatewayInfo;
+  getNetwork: () => Network;
   initialize: (option?: {
     eventHandlerOptions?: DefaultEventHandlerOptions;
     queryHandlerOptions?: DefaultQueryHandlerOptions;
     connectionOptions?: any;
     parent?: Span;
   }) => Promise<boolean>;
-  registerNewUser: (id: string, secret: string) => Promise<boolean>;
-  disconnect: () => void;
-  getIdentityInfo: (label: string) => Promise<Identity & { credentials: { certificate } }>;
-  queryChannels: () => Promise<ChannelQueryResponse>;
-  queryBlock: (channelName: string, blockNum: number) => Promise<any>;
-  queryChannelHeight: (channelName: string) => Promise<number>;
-  getDefaultChannelName: () => string;
   initializeChannelEventHubs: (newBlock$: Subject<SyncJob>) => Promise<boolean>;
   processBlockEvent: (block: TBlock) => [Blocks, Partial<Transactions>[]];
-  getNetwork: () => Network;
+  queryBlock: (channelName: string, blockNum: number) => Promise<any>;
+  queryChannelHeight: (channelName: string) => Promise<number>;
+  queryChannels: () => Promise<ChannelQueryResponse>;
+  registerNewUser: (id: string, secret: string) => Promise<boolean>;
 };
 
 export type FabricGatewayInfo = {

@@ -26,6 +26,7 @@
     "test:sync-restart": "DEBUG=sync* jest restart.test",
     "test:synchronizer": "DEBUG=sync* jest synchronizer.test",
     "test:blockarrive": "DEBUG=sync:queue* jest blockarrive.test",
+    "test:repo": "DEBUG=repo* jest repo.test",
     "server": "node --require './dist/tracing.js' ./dist/app.js",
     "client": "node --experimental-modules ./dist/client.js",
     "start": "node ./dist/sync.js"

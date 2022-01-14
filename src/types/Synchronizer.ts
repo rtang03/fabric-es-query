@@ -10,7 +10,6 @@ export type SyncJob = {
 export type Synchronizer = {
   connect: () => Promise<Connection>;
   disconnect: () => Promise<void>;
-  isConnected: () => Promise<boolean>;
   getInfo: () => {
     persist: boolean;
     syncTime: number;
@@ -18,12 +17,16 @@ export type Synchronizer = {
     timeout: number;
     showStateChanges: boolean;
   };
+  getNewBlockObs: () => Subject<SyncJob>;
   isBackendsReady: () => Promise<boolean>;
+  isConnected: () => Promise<boolean>;
+  isSyncJobActive: () => boolean;
+  setMaxSyncHeight: (maxheight: number) => void;
   start: (numberOfExecution?: number) => Promise<boolean>;
   stop: () => Promise<void>;
-  isSyncJobActive: () => boolean;
-  stopAndChangeSyncTime: (syncTime: number) => void;
   stopAndChangeRequestTimeout: (timeout: number) => void;
   stopAndChangeShowStateChanges: (state: boolean) => void;
-  getNewBlockObs: () => Subject<SyncJob>;
+  stopAndChangeSyncTime: (syncTime: number) => void;
+  syncBlocksByEntityName?: (entityName: string) => Promise<boolean>;
+  syncBlocksByEntityNameEntityId?: (entityName: string, entityId: string) => Promise<boolean>;
 };

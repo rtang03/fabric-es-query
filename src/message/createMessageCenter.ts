@@ -82,25 +82,24 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
       });
 
   return {
-    isConnected: async () => {
-      if (!persist) throw new Error('isConnected() is not available');
-      if (!connection?.isConnected) {
-        logger.info(`${NS} is not connected`);
-        return false;
-      }
-      return true;
-    },
+    /**
+     * disconnect
+     */
     disconnect: async () => {
       if (!persist) throw new Error('disconnect() is not available');
       await connection.close();
 
       logger.info(`${NS} disconnected`);
     },
-    getInfo: () => ({ windowTime, bufferSize, persist }),
-    subscribe: (observer: Partial<Observer<Message>>) => $messages.subscribe(observer),
-    notify: (m) => $messages.next({ ...m, timestamp: new Date() }),
-    getMessagesObs: () => $messages,
-    getSubscription: () => subscription,
+    /**
+     * getIncidents
+     * @param take
+     * @param skip
+     * @param orderBy
+     * @param sort
+     * @param kind
+     * @param title
+     */
     getIncidents: async ({ take, skip, orderBy, sort, kind, title }) => {
       const me = 'getIncidents';
       if (!persist) throw new Error(`${me}() is not available`);
@@ -138,8 +137,44 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
         return null;
       }
     },
+    /**
+     * getIncidentsByPeriod
+     */
     getIncidentsByPeriod: async () => {
       return Promise.reject(new Error('Not implemented yet'));
     },
+    /**
+     * getInfo
+     */
+    getInfo: () => ({ windowTime, bufferSize, persist }),
+    /**
+     * getMessagesObs
+     */
+    getMessagesObs: () => $messages,
+    /**
+     * getSubscription
+     */
+    getSubscription: () => subscription,
+    /**
+     * isConnected
+     */
+    isConnected: async () => {
+      if (!persist) throw new Error('isConnected() is not available');
+      if (!connection?.isConnected) {
+        logger.info(`${NS} is not connected`);
+        return false;
+      }
+      return true;
+    },
+    /**
+     * notify
+     * @param message
+     */
+    notify: (message) => $messages.next({ ...message, timestamp: new Date() }),
+    /**
+     * subscribe
+     * @param observer
+     */
+    subscribe: (observer: Partial<Observer<Message>>) => $messages.subscribe(observer),
   };
 };

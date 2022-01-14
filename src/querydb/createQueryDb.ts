@@ -45,7 +45,10 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
   const NS = 'querydb';
   const schema = nonDefaultSchema || 'default';
 
-  // Parse one write_set
+  /**
+   * parseWriteSet
+   * @param tx
+   */
   const parseWriteSet = (tx: Transactions): Commit => {
     let ws: unknown;
     const { chaincodename, write_set, txhash, blockid } = tx;

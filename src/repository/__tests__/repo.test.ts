@@ -4,13 +4,20 @@ import path from 'path';
 import util from 'util';
 import yaml from 'js-yaml';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
-import { createFabricGateway } from '../../fabric';
+import { createFabricGateway, isCommitRecord } from '../../fabric';
 import { FabricWallet } from '../../fabric/entities';
 import { createMessageCenter } from '../../message';
 import { createQueryDb } from '../../querydb';
 import { Blocks, Commit, KeyValue, Transactions } from '../../querydb/entities';
-import type { MessageCenter, QueryDb, FabricGateway, ConnectionProfile } from '../../types';
+import type {
+  MessageCenter,
+  QueryDb,
+  FabricGateway,
+  ConnectionProfile,
+  Repository,
+} from '../../types';
 import { isConnectionProfile, logger, waitSecond } from '../../utils';
+import { createRepository } from '../createRepository';
 
 /**
  * Running:
@@ -21,10 +28,13 @@ let messageCenter: MessageCenter;
 let fabric: FabricGateway;
 let profile: ConnectionProfile;
 let queryDb: QueryDb;
+let repo: Repository;
 let defaultConnection: Connection;
 let connection: Connection;
 let testConnectionOptions: ConnectionOptions;
 
+const entityName = 'dev_entity';
+const entityId = 'ent_dev_';
 const schema = 'repotest';
 const connectionOptions: ConnectionOptions = {
   name: 'default',
@@ -97,6 +107,15 @@ beforeAll(async () => {
     logger.error('fail to createQueryDb: ', e);
     process.exit(1);
   }
+  // Repo
+  try {
+    await fabric.initialize();
+
+    repo = createRepository({ fabric, queryDb, logger, messageCenter, timeoutMs: 1500 });
+  } catch (e) {
+    logger.error('fail to createRepository: ', e);
+    process.exit(1);
+  }
 });
 
 afterAll(async () => {
@@ -108,16 +127,45 @@ afterAll(async () => {
 });
 
 describe('repo tests', () => {
-  it('initialize fabric gateway', async () => {
-    await fabric.initialize();
+  // it('fail to cmd_getByEntityName: invalid entityName', async () =>
+  //   repo
+  //     .cmd_getByEntityName('abcd')
+  //     .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
+  //
+  // it('cmd_getByEntityName', async () =>
+  //   repo.cmd_getByEntityName(entityName).then(({ status, data }) => {
+  //     expect(status).toEqual('ok');
+  //     expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1', 'ent_dev_org2']);
+  //   }));
 
-    const { isCaAdminEnrolled, isCaAdminInWallet } = fabric.getInfo();
+  // it('fail to cmd_getByEntityNameEntityId: invalid entityName', async () =>
+  //   repo
+  //     .cmd_getByEntityNameEntityId('abcd', entityId)
+  //     .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
+  //
+  // it('fail to cmd_getByEntityNameEntityId: invalid entityId', async () =>
+  //   repo
+  //     .cmd_getByEntityNameEntityId(entityName, 'efgh')
+  //     .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
+  //
+  // it('cmd_getByEntityNameEntityId', async () =>
+  //   repo.cmd_getByEntityNameEntityId(entityName, entityId).then(({ status, data }) => {
+  //     expect(status).toEqual('ok');
+  //     expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1', 'ent_dev_org2']);
+  //   }));
 
-    expect(isCaAdminEnrolled).toBeTruthy();
-    expect(isCaAdminInWallet).toBeTruthy();
-  });
+  // it('fail to cmd_getByEntityNameEntityId: invalid entityName', async () =>
+  //   repo
+  //     .cmd_getByEntityNameEntityIdCommitId(entityName, entityId, 'abcd')
+  //     .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
+  //
+  // it('cmd_getByEntityNameEntityId', async () =>
+  //   repo
+  //     .cmd_getByEntityNameEntityIdCommitId(entityName, entityId, 'ent_dev_org1')
+  //     .then(({ status, data }) => {
+  //       expect(status).toEqual('ok');
+  //       expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1']);
+  //     }));
 
-  it('test', async () => {
-    return;
-  });
+
 });
