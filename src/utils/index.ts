@@ -10,3 +10,4 @@ export * from './generateToken ';
 export * from './getPaginated';
 export * from './promiseToReadFile';
 export * from './createRestRoute';
+export * from './envVariables';

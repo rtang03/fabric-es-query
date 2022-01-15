@@ -10,6 +10,8 @@ import type { QueryDb, MessageCenter } from '../../types';
 import {
   CODE,
   createMetricServer,
+  extractNumberEnvVar,
+  extractStringEnvVar,
   isBlocks,
   isCommit,
   isTransactions,
@@ -43,14 +45,19 @@ let metrics: {
 
 const schema = 'querydbtest';
 const noResult = { total: 0, items: [], hasMore: false, cursor: 0 };
+const port = extractNumberEnvVar('QUERYDB_PORT');
+const username = extractStringEnvVar('QUERYDB_USERNAME');
+const host = extractStringEnvVar('QUERYDB_HOST');
+const password = extractStringEnvVar('QUERYDB_PASSWD');
+const database = extractStringEnvVar('QUERYDB_DATABASE');
 const connectionOptions: ConnectionOptions = {
   name: 'default',
   type: 'postgres' as any,
-  host: process.env.QUERYDB_HOST,
-  port: parseInt(process.env.QUERYDB_PORT, 10),
-  username: process.env.QUERYDB_USERNAME,
-  password: process.env.QUERYDB_PASSWD,
-  database: process.env.QUERYDB_DATABASE,
+  host,
+  port,
+  username,
+  password,
+  database,
   logging: true,
   synchronize: false,
   dropSchema: false,

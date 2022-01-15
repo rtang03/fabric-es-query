@@ -13,6 +13,8 @@ channels:
       - orderer0-org0
     peers:
       - peer0-org1
+    chaincodes:
+      - eventstore
 
 organizations:
   Org1MSP:

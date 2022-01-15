@@ -5,18 +5,18 @@ import winston from 'winston';
 import { KIND, MSG } from '../../message';
 import type { MessageCenter } from '../../types';
 import { type Commit, createCommitId } from './Commit';
-import { isCommitRecord } from './typeGuard';
+import type { FabricOption } from './FabricOption';
 
 export const submitPrivateData: (
   fcn: string,
   args: string[],
   transientData: Record<string, Buffer>,
-  options: { network: Network; logger: winston.Logger; messageCenter?: MessageCenter }
+  options: FabricOption
 ) => Promise<Record<string, Commit> & { error?: any; status?: string; message?: string }> = async (
   fcn,
   args,
   transientData,
-  { network, logger, messageCenter: mCenter }
+  { nonDiscoveryNetwork, logger, messageCenter: mCenter }
 ) => {
   const NS = 'fabric:service';
 
@@ -26,7 +26,7 @@ export const submitPrivateData: (
 
   const input_args = fcn === 'privatedata:createCommit' ? [...args, createCommitId()] : args;
 
-  const transaction = network
+  const transaction = nonDiscoveryNetwork
     .getContract('eventstore')
     .createTransaction(fcn)
     .setTransient(transientData);
@@ -52,9 +52,6 @@ export const submitPrivateData: (
       Debug(NS)('%s successful response', fcn);
       Debug(NS)('submitTx response in raw Buffer', res);
       Debug(NS)('submitTx  parse response', result);
-
-      if (isCommitRecord(result))
-        logger.error(util.format(`❌ unexpected submitPrivateTx response format, %j`, result));
 
       mCenter?.notify({
         kind: KIND.SYSTEM,

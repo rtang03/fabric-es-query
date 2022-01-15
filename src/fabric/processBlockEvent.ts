@@ -3,7 +3,6 @@ import sha from 'js-sha256';
 import winston from 'winston';
 import { Blocks, Transactions } from '../querydb/entities';
 import type { TBlock } from '../types';
-// import { generateBlockHash } from './generateBlockHash';
 
 const convertFormatOfValue = (prop: string, encoding: string, obj: any) => {
   if (Array.isArray(obj)) {

@@ -32,11 +32,11 @@ export type Repository<TEvent = any> = {
   cmd_append: (
     payload: AppendCommitPayload<TEvent>,
     isPrivateData?: boolean
-  ) => Promise<RepoResponse<any>>;
+  ) => Promise<RepoResponse<Commit>>;
   cmd_create: (
     payload: CreateCommitPayload<TEvent>,
     isPrivateData?: boolean
-  ) => Promise<RepoResponse<any>>;
+  ) => Promise<RepoResponse<Commit>>;
   cmd_deleteByEntityId: (entityName: string, id: string) => Promise<RepoResponse>;
   cmd_deleteByEntityIdCommitId: (
     entityName: string,

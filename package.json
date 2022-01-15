@@ -26,7 +26,7 @@
     "test:sync-restart": "DEBUG=sync* jest restart.test",
     "test:synchronizer": "DEBUG=sync* jest synchronizer.test",
     "test:blockarrive": "DEBUG=sync:queue* jest blockarrive.test",
-    "test:repo": "DEBUG=repo* jest repo.test",
+    "test:repo": "DEBUG=repo*,fabric* jest repo.test",
     "server": "node --require './dist/tracing.js' ./dist/app.js",
     "client": "node --experimental-modules ./dist/client.js",
     "start": "node ./dist/sync.js"
@@ -67,6 +67,7 @@
     "rimraf": "^3.0.2",
     "rxjs": "^7.4.0",
     "typeorm": "0.2.41",
+    "validator": "^13.7.0",
     "winston": "3.3.3",
     "winston2": "npm:winston@2.4.5",
     "ws": "^8.4.0"
@@ -80,6 +81,7 @@
     "@types/pg-pool": "^2.0.3",
     "@types/react-redux": "^7.1.21",
     "@types/rimraf": "^3.0.2",
+    "@types/validator": "^13.7.1",
     "@types/ws": "^8.2.2",
     "@typescript-eslint/eslint-plugin": "^5.7.0",
     "@typescript-eslint/eslint-plugin-tslint": "^5.7.0",

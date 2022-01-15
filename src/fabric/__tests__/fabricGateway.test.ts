@@ -12,6 +12,8 @@ import { createMessageCenter } from '../../message';
 import type { ConnectionProfile, FabricGateway, MessageCenter } from '../../types';
 import {
   createMetricServer,
+  extractNumberEnvVar,
+  extractStringEnvVar,
   isConnectionProfile,
   logger,
   type Meters,
@@ -24,7 +26,7 @@ import { FabricWallet } from '../entities';
 /**
  * Running:
  * 1. cd && ./run.sh
- * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.explorer.yaml -f compose.ot.yaml up -d --no-recreate
+ * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.ot.yaml up -d --no-recreate
  */
 let messageCenter: MessageCenter;
 let fg: FabricGateway;
@@ -39,14 +41,22 @@ let metrics: {
 };
 
 const schema = 'fabrictest';
+const port = extractNumberEnvVar('PSQL_PORT');
+const username = extractStringEnvVar('PSQL_USERNAME');
+const host = extractStringEnvVar('PSQL_HOST');
+const password = extractStringEnvVar('PSQL_PASSWD');
+const database = extractStringEnvVar('PSQL_DATABASE');
+const connectionProfile = extractStringEnvVar('CONNECTION_PROFILE');
+const adminId = extractStringEnvVar('ADMIN_ID');
+const adminSecret = extractStringEnvVar('ADMIN_SECRET');
 const connectionOptions: ConnectionOptions = {
   name: 'default',
   type: 'postgres' as any,
-  host: process.env.PSQL_HOST,
-  port: parseInt(process.env.PSQL_PORT, 10),
-  username: process.env.PSQL_USERNAME,
-  password: process.env.PSQL_PASSWD,
-  database: process.env.PSQL_DATABASE,
+  host,
+  port,
+  username,
+  password,
+  database,
   logging: true,
   synchronize: false,
   dropSchema: false,
@@ -85,7 +95,7 @@ beforeAll(async () => {
 
   // Loading connection profile
   try {
-    const pathToConnectionProfile = path.join(process.cwd(), process.env.CONNECTION_PROFILE);
+    const pathToConnectionProfile = path.join(process.cwd(), connectionProfile);
     const file = fs.readFileSync(pathToConnectionProfile);
     const loadedFile: unknown = yaml.load(file);
     if (isConnectionProfile(loadedFile)) profile = loadedFile;
@@ -109,8 +119,10 @@ beforeAll(async () => {
     connection = await createConnection(testConnectionOptions);
 
     fg = createFabricGateway(profile, {
-      adminId: process.env.ADMIN_ID,
-      adminSecret: process.env.ADMIN_SECRET,
+      adminId,
+      adminSecret,
+      discovery: true,
+      asLocalhost: true,
       connection,
       logger,
       meters: metrics.meters,
@@ -156,7 +168,7 @@ describe('fabricGateway tests', () => {
     fg.getIdentityInfo('abcd').then((result) => expect(result).toBeNull()));
 
   it('getIdentityInfo', async () =>
-    fg.getIdentityInfo(process.env.ADMIN_ID).then(({ type, mspId }) => {
+    fg.getIdentityInfo(adminId).then(({ type, mspId }) => {
       expect(type).toEqual('X.509');
       expect(mspId).toEqual('Org1MSP');
     }));

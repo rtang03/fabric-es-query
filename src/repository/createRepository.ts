@@ -1,9 +1,12 @@
 import util from 'util';
 import Debug from 'debug';
+import validator from 'validator';
 import winston from 'winston';
-import { evaluate, submit, submitPrivateData } from '../fabric';
+import { evaluate, type FabricOption, submit, submitPrivateData } from '../fabric';
+import { KIND, MSG } from '../message';
 import type { FabricGateway, MessageCenter, QueryDb, Repository, RepoResponse } from '../types';
 import { withTimeout } from '../utils';
+import { ERROR } from './constants';
 
 export type CreateRepositoryOption = {
   fabric: FabricGateway;
@@ -17,10 +20,11 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
   fabric,
   queryDb,
   logger,
-  messageCenter,
+  messageCenter: mCenter,
   timeoutMs,
 }) => {
   const network = fabric.getNetwork();
+  const nonDiscoveryNetwork = fabric.getNonDiscoveryNetwork();
   const NS = 'repo';
 
   logger.info('Preparing repository');
@@ -37,7 +41,25 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
       return { status: 'error', message: error.message, error };
     }
   };
-  const fabricOption = { network, logger, messageCenter };
+  const fabricOption: FabricOption = {
+    network,
+    nonDiscoveryNetwork,
+    logger,
+    messageCenter: mCenter,
+  };
+
+  /**
+   * addTimestamp
+   * @param eventsInput
+   */
+  const addTimestamp = (eventsInput) =>
+    eventsInput.map((event) => ({
+      type: event.type,
+      payload: {
+        ...event.payload,
+        timestamp: Math.round(new Date().getTime()),
+      },
+    }));
 
   return {
     /**
@@ -47,54 +69,52 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param events
      * @param isPrivateData
      */
-    cmd_append: ({ entityName, id, events }, isPrivateData) =>
-      isPrivateData
-        ? catchError('privatedata:createCommit', async (fcnName) => {
-            // get latest
-            const commits = await withTimeout(
+    cmd_append: ({ entityName, id, events }, isPrivateData) => {
+      if (!validator.isAlphanumeric(entityName))
+        return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
+
+      if (!validator.isAlphanumeric(id))
+        return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
+
+      const stringifyEvents = ~~events.length ? JSON.stringify(addTimestamp(events)) : '[]';
+
+      return catchError('createCommit', async (fcnName) => {
+        const commits = isPrivateData
+          ? await withTimeout(
               evaluate('privatedata:queryByEntityId', [entityName, id], fabricOption),
               timeoutMs
-            );
-            const version = Object.keys(commits).length;
-            const stringifyEvents = events ? JSON.stringify(events) : null;
-
-            // append
-            const result = await withTimeout(
-              submit(
-                fcnName,
-                [entityName, id, version.toString(), stringifyEvents, ''],
-                fabricOption
-              ),
-              timeoutMs
-            );
-
-            Debug(`${NS}:${fcnName}`)('result, %O', result);
-
-            return { status: 'ok', data: result };
-          })
-        : catchError('eventstore:createCommit', async (fcnName) => {
-            // get latest
-            const commits = await withTimeout(
+            )
+          : await withTimeout(
               evaluate('eventstore:queryByEntityId', [entityName, id], fabricOption),
               timeoutMs
             );
-            const version = Object.keys(commits).length;
-            const stringifyEvents = events ? JSON.stringify(events) : null;
-
-            // append
-            const result = await withTimeout(
+        const version = Object.keys(commits).length;
+        const result = isPrivateData
+          ? await withTimeout(
+              submitPrivateData(
+                `privatedata:${fcnName}`,
+                [entityName, id, version.toString()],
+                { eventstr: Buffer.from(stringifyEvents) },
+                fabricOption
+              ),
+              timeoutMs
+            )
+          : await withTimeout(
               submit(
-                fcnName,
+                `eventstore:${fcnName}`,
                 [entityName, id, version.toString(), stringifyEvents, ''],
                 fabricOption
               ),
               timeoutMs
             );
 
-            Debug(`${NS}:${fcnName}`)('result, %O', result);
+        Debug(`${NS}:${fcnName}`)('result, %O', result);
 
-            return { status: 'ok', data: result };
-          }),
+        return result.error
+          ? { status: 'error', ...result }
+          : { status: 'ok', data: Object.values(result)?.[0] };
+      });
+    },
     /**
      * cmd_create / eventstore:createCommit
      * @param entityName
@@ -103,46 +123,63 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param version
      * @param isPrivateData
      */
-    cmd_create: ({ entityName, id, events, version }, isPrivateData) =>
-      isPrivateData
-        ? catchError('privatedata:createCommit', async (fcnName) => {
-            const stringifyEvents = events ? JSON.stringify(events) : null;
-            const result = await withTimeout(
+    cmd_create: ({ entityName, id, events, version }, isPrivateData) => {
+      if (!validator.isAlphanumeric(entityName))
+        return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
+
+      if (!validator.isAlphanumeric(id))
+        return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
+
+      if (!Number.isInteger(version)) return Promise.reject(new Error(ERROR.INTEGER_REQUIRED));
+
+      const stringifyEvents = ~~events.length ? JSON.stringify(addTimestamp(events)) : '[]';
+
+      Debug(`${NS}:cmd_create`)('events: %s', stringifyEvents);
+
+      return catchError('createCommit', async (fcnName) => {
+        const result = isPrivateData
+          ? await withTimeout(
               submitPrivateData(
-                fcnName,
+                `privatedata:${fcnName}`,
                 [entityName, id, version.toString()],
                 { eventstr: Buffer.from(stringifyEvents) },
                 fabricOption
               ),
               timeoutMs
-            );
-
-            Debug(`${NS}:${fcnName}`)('result, %O', result);
-
-            return { status: 'ok', data: result };
-          })
-        : catchError('eventstore:createCommit', async (fcnName) => {
-            const stringifyEvents = events ? JSON.stringify(events) : null;
-            const result = await withTimeout(
+            )
+          : await withTimeout(
               submit(
-                fcnName,
+                `eventstore:${fcnName}`,
                 [entityName, id, version.toString(), stringifyEvents, ''],
                 fabricOption
               ),
               timeoutMs
             );
 
-            Debug(`${NS}:${fcnName}`)('result, %O', result);
+        Debug(`${NS}:${fcnName}`)('result, %O', result);
 
-            return { status: 'ok', data: result };
-          }),
+        return result.error
+          ? { status: 'error', ...result }
+          : { status: 'ok', data: Object.values(result)?.[0] };
+      });
+    },
     /** cmd_deleteByEntityId / eventstore:deleteByEntityId
      * Delete all commits by entityName, entityId
      * @param entityName
      * @param id
      */
-    cmd_deleteByEntityId: async (entityName, id) =>
-      catchError('eventstore:deleteByEntityId', async (fcnName) => {
+    cmd_deleteByEntityId: async (entityName, id) => {
+      if (!validator.isAlphanumeric(entityName))
+        return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
+
+      if (!validator.isAlphanumeric(id))
+        return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
+
+      const me = 'cmd_deleteByEntityId';
+      const broadcast = false;
+      const save = true;
+
+      return catchError('eventstore:deleteByEntityId', async (fcnName) => {
         const result = await withTimeout(
           submit(fcnName, [entityName, id], fabricOption),
           timeoutMs
@@ -150,8 +187,28 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
 
         Debug(`${NS}:${fcnName}`)('result, %O', result);
 
-        return { status: 'ok', data: Object.values(result) };
-      }),
+        if (result?.status === 'SUCCESS') {
+          logger.info(util.format('%s, %j', me, result));
+
+          return { status: 'ok' };
+        } else {
+          logger.error(util.format('%s, %j', me, result));
+
+          mCenter?.notify({
+            kind: KIND.ERROR,
+            title: MSG.SUBMIT_ERROR,
+            desc: me,
+            broadcast,
+            save,
+          });
+
+          return {
+            status: 'error',
+            message: `fail to ${me}: entityName ${entityName} entityId ${id}`,
+          };
+        }
+      });
+    },
     /**
      * cmd_deleteByEntityIdCommitId / eventstore:deleteByEntityIdCommitId
      * @param id
@@ -159,35 +216,67 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param commitId
      * @param isPrivateData
      */
-    cmd_deleteByEntityIdCommitId: (entityName, id, commitId, isPrivateData) =>
-      isPrivateData
-        ? catchError('privatedata:deleteByEntityIdCommitId', async (fcnName) => {
-            const result = await withTimeout(
-              submitPrivateData(fcnName, [entityName, id, commitId], null, fabricOption),
+    cmd_deleteByEntityIdCommitId: (entityName, id, commitId, isPrivateData) => {
+      if (!validator.isAlphanumeric(entityName))
+        return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
+
+      if (!validator.isAlphanumeric(id))
+        return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
+
+      if (!validator.isNumeric(commitId))
+        return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
+
+      const me = 'cmd_deleteByEntityIdCommitId';
+      const broadcast = false;
+      const save = true;
+
+      return catchError('deleteByEntityIdCommitId', async (fcnName) => {
+        const result = isPrivateData
+          ? await withTimeout(
+              submitPrivateData(
+                `privatedata:${fcnName}`,
+                [entityName, id, commitId],
+                null,
+                fabricOption
+              ),
+              timeoutMs
+            )
+          : await withTimeout(
+              submit(`eventstore:${fcnName}`, [entityName, id, commitId], fabricOption),
               timeoutMs
             );
 
-            Debug(`${NS}:${fcnName}`)('result, %O', result);
+        Debug(`${NS}:${fcnName}`)('result, %O', result);
 
-            return { status: 'ok', data: Object.values(result) };
-          })
-        : catchError('eventstore:deleteByEntityIdCommitId', async (fcnName) => {
-            const result = await withTimeout(
-              submit(fcnName, [entityName, id, commitId], fabricOption),
-              timeoutMs
-            );
+        if (result?.status === 'SUCCESS') {
+          logger.info(util.format('%s, %j', me, result));
 
-            Debug(`${NS}:${fcnName}`)('result, %O', result);
+          return { status: 'ok' };
+        } else {
+          logger.error(util.format('%s, %j', me, result));
 
-            return { status: 'ok', data: Object.values(result) };
-          }),
+          mCenter?.notify({
+            kind: KIND.ERROR,
+            title: MSG.SUBMIT_ERROR,
+            desc: me,
+            broadcast,
+            save,
+          });
+
+          return {
+            status: 'error',
+            message: `fail to ${me}: entityName ${entityName} entityId ${id} commitId ${commitId}`,
+          };
+        }
+      });
+    },
     /**
      * cmd_getByEntityName / eventstore:queryByEntityName
      * @param entityName
      * @param isPrivateData
      */
-    cmd_getByEntityName: (entityName, isPrivateData) =>
-      catchError(
+    cmd_getByEntityName: (entityName, isPrivateData) => {
+      return catchError(
         isPrivateData ? 'privatedata:queryByEntityName' : 'eventstore:queryByEntityName',
         async (fcnName) => {
           const result: unknown = await withTimeout(
@@ -199,16 +288,17 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
 
           return { status: 'ok', data: Object.values(result) };
         }
-      ),
+      );
+    },
     /**
      * cmd_getByEntityNameEntityId / eventstore:queryByEntityId
      * @param entityName
      * @param id
      * @param isPrivateData
      */
-    cmd_getByEntityNameEntityId: (entityName, id, isPrivateData) =>
-      catchError(
-        isPrivateData ? 'privatedata:queryByEntityName' : 'eventstore:queryByEntityId',
+    cmd_getByEntityNameEntityId: (entityName, id, isPrivateData) => {
+      return catchError(
+        isPrivateData ? 'privatedata:queryByEntityId' : 'eventstore:queryByEntityId',
         async (fcnName) => {
           const result = await withTimeout(
             evaluate(fcnName, [entityName, id], fabricOption),
@@ -219,7 +309,8 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
 
           return { status: 'ok', data: Object.values(result) };
         }
-      ),
+      );
+    },
     /**
      * cmd_getByEntityNameEntityIdCommitId / eventstore:queryByEntityIdCommitId
      * @param entityName
@@ -227,8 +318,8 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param commitId
      * @param isPrivateData
      */
-    cmd_getByEntityNameEntityIdCommitId: (entityName, id, commitId, isPrivateData) =>
-      catchError(
+    cmd_getByEntityNameEntityIdCommitId: (entityName, id, commitId, isPrivateData) => {
+      return catchError(
         isPrivateData
           ? 'privatedata:queryByEntityIdCommitId'
           : 'eventstore:queryByEntityIdCommitId',
@@ -242,7 +333,8 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
 
           return { status: 'ok', data: Object.values(result) };
         }
-      ),
+      );
+    },
     /**
      * query_getByEntityName
      * @param entityName
@@ -251,8 +343,8 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param orderBy
      * @param sort
      */
-    query_getByEntityName: ({ entityName, take, skip, orderBy, sort }) =>
-      catchError('query_getByEntityName', async (fcnName) => {
+    query_getByEntityName: ({ entityName, take, skip, orderBy, sort }) => {
+      return catchError('query_getByEntityName', async (fcnName) => {
         const result = await withTimeout(
           queryDb.findCommit({ entityName, orderBy, skip, sort, take }),
           timeoutMs
@@ -261,7 +353,8 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
         Debug(`${NS}:${fcnName}`)('result, %O', result);
 
         return { status: 'ok', data: result };
-      }),
+      });
+    },
     /**
      * query_getByEntityNameEntityId
      * @param entityName
@@ -271,8 +364,8 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param orderBy
      * @param sort
      */
-    query_getByEntityNameEntityId: ({ entityName, entityId, take, skip, orderBy, sort }) =>
-      catchError('query_getByEntityNameEntityId', async (fcnName) => {
+    query_getByEntityNameEntityId: ({ entityName, entityId, take, skip, orderBy, sort }) => {
+      return catchError('query_getByEntityNameEntityId', async (fcnName) => {
         const result = await withTimeout(
           queryDb.findCommit({
             entityName,
@@ -288,7 +381,8 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
         Debug(`${NS}:${fcnName}`)('result, %O', result);
 
         return { status: 'ok', data: result };
-      }),
+      });
+    },
     /**
      * query_getByEntityNameEntityIdCommitId
      * @param entityName
@@ -307,8 +401,8 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
       skip,
       orderBy,
       sort,
-    }) =>
-      catchError('query_getByEntityNameEntityIdCommitId', async (fcnName) => {
+    }) => {
+      return catchError('query_getByEntityNameEntityIdCommitId', async (fcnName) => {
         const result = await withTimeout(
           queryDb.findCommit({
             entityName,
@@ -325,15 +419,16 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
         Debug(`${NS}:${fcnName}`)('result, %O', result);
 
         return { status: 'ok', data: result };
-      }),
+      });
+    },
     /**
      * query_cascadeDeleteByEntityName
      * mainly used for dev/test
      * @param entityName
      * @param entityId
      */
-    query_cascadeDelete: (entityName, entityId) =>
-      catchError('query_cascadeDeleteByEntityName', async (fcnName) => {
+    query_cascadeDelete: (entityName, entityId) => {
+      return catchError('query_cascadeDeleteByEntityName', async (fcnName) => {
         // step 1: find corresponding commits
         const query = {
           entityName,
@@ -365,10 +460,10 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
 
           logger.error(util.format('integrity check, %j', result));
 
+          Debug(`${NS}:${fcnName}`)('integrity check result, %O', result);
+
           return result;
         }
-
-        Debug(`${NS}:${fcnName}`)('integrity check result, %O', result);
 
         // step 3: perform cascaded deletions
         data = [];
@@ -388,6 +483,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
         Debug(`${NS}:${fcnName}`)('cascaded deletions result, %O', result);
 
         return result;
-      }),
+      });
+    },
   };
 };

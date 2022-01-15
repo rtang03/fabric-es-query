@@ -1,7 +1,13 @@
 require('dotenv').config({ path: 'src/message/__tests__/.env.messagecenter' });
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import type { MessageCenter } from '../../types';
-import { isIncident, logger, waitSecond } from '../../utils';
+import {
+  extractNumberEnvVar,
+  extractStringEnvVar,
+  isIncident,
+  logger,
+  waitSecond,
+} from '../../utils';
 import { createMessageCenter } from '../createMessageCenter';
 import { Incident } from '../entities';
 import { m1a, m2a, m3a, m4a, m5a, m1b, m2b, m3b, m4b, m5b } from './__utils__/data';
@@ -13,14 +19,19 @@ let connection: Connection;
 let testConnectionOptions: ConnectionOptions;
 
 const schema = 'mcentertest';
+const port = extractNumberEnvVar('QUERYDB_PORT');
+const username = extractStringEnvVar('QUERYDB_USERNAME');
+const host = extractStringEnvVar('QUERYDB_HOST');
+const password = extractStringEnvVar('QUERYDB_PASSWD');
+const database = extractStringEnvVar('QUERYDB_DATABASE');
 const connectionOptions: ConnectionOptions = {
   name: 'default',
   type: 'postgres' as any,
-  host: process.env.QUERYDB_HOST,
-  port: parseInt(process.env.QUERYDB_PORT, 10),
-  username: process.env.QUERYDB_USERNAME,
-  password: process.env.QUERYDB_PASSWD,
-  database: process.env.QUERYDB_DATABASE,
+  host,
+  port,
+  username,
+  password,
+  database,
   logging: true,
   synchronize: false,
   dropSchema: false,

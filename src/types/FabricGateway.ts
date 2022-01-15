@@ -14,11 +14,12 @@ import { type TBlock } from './TBlock';
 import ChannelQueryResponse = protos.ChannelQueryResponse;
 
 export type FabricGateway = {
-  disconnect: () => void;
+  disconnect: () => Promise<void>;
   getDefaultChannelName: () => string;
   getIdentityInfo: (label: string) => Promise<Identity & { credentials: { certificate } }>;
   getInfo: () => FabricGatewayInfo;
   getNetwork: () => Network;
+  getNonDiscoveryNetwork: () => Network;
   initialize: (option?: {
     eventHandlerOptions?: DefaultEventHandlerOptions;
     queryHandlerOptions?: DefaultQueryHandlerOptions;

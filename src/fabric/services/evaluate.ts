@@ -1,16 +1,15 @@
 import util from 'util';
 import Debug from 'debug';
-import { type Network } from 'fabric-network';
-import winston from 'winston';
+import { isEqual } from 'lodash';
 import { KIND, MSG } from '../../message';
-import type { MessageCenter } from '../../types';
 import { type Commit } from './Commit';
+import type { FabricOption } from './FabricOption';
 import { isCommitRecord } from './typeGuard';
 
 export const evaluate: (
   fcn: string,
   args: string[],
-  options: { network: Network; logger: winston.Logger; messageCenter?: MessageCenter }
+  options: FabricOption
 ) => Promise<Record<string, Commit> | { error: any }> = async (
   fcn,
   args,
@@ -39,10 +38,24 @@ export const evaluate: (
 
       Debug(NS)('%s successful response', fcn);
       Debug(NS)('evaluate tx response in raw Buffer', res);
-      Debug(NS)('evaluate tx  parse response', result);
+      Debug(NS)('evaluate tx parse response', result);
 
-      if (isCommitRecord(result))
-        logger.error(util.format(`❌ unexpected evaluateTx response format, %j`, result));
+      // ensure non-empty result is type-checked
+      if (!isEqual(result, {}) && !isCommitRecord(result)) {
+        const errorMessage = 'unexpected evaluateTx response format';
+        logger.error(util.format(`%s, %j`, errorMessage, result));
+
+        mCenter?.notify({
+          kind: KIND.ERROR,
+          title: MSG.EVALUATE_ERROR,
+          desc,
+          error: errorMessage,
+          broadcast,
+          save,
+        });
+
+        return null;
+      }
 
       mCenter?.notify({
         kind: KIND.SYSTEM,

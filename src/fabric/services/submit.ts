@@ -1,16 +1,13 @@
 import util from 'util';
 import Debug from 'debug';
-import { type Network } from 'fabric-network';
-import winston from 'winston';
 import { KIND, MSG } from '../../message';
-import type { MessageCenter } from '../../types';
 import { type Commit, createCommitId } from './Commit';
-import { isCommitRecord } from './typeGuard';
+import type { FabricOption } from './FabricOption';
 
 export const submit: (
   fcn: string,
   args: string[],
-  option: { network: Network; logger: winston.Logger; messageCenter?: MessageCenter }
+  option: FabricOption
 ) => Promise<Record<string, Commit> & { error?: any; status?: string; message?: string }> = async (
   fcn,
   args,
@@ -51,9 +48,6 @@ export const submit: (
       Debug(NS)('%s successful response', fcn);
       Debug(NS)('submitTx response in raw Buffer', res);
       Debug(NS)('submitTx  parse response', result);
-
-      if (isCommitRecord(result))
-        logger.error(util.format(`❌ unexpected submitTx response format, %j`, result));
 
       mCenter?.notify({
         kind: KIND.SYSTEM,

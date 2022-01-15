@@ -16,7 +16,14 @@ import type {
   FabricGateway,
   QueryDb,
 } from '../../types';
-import { CODE, isConnectionProfile, logger, waitSecond } from '../../utils';
+import {
+  CODE,
+  extractNumberEnvVar,
+  extractStringEnvVar,
+  isConnectionProfile,
+  logger,
+  waitSecond,
+} from '../../utils';
 import { createSynchronizer } from '../createSynchronizer';
 
 /**
@@ -34,14 +41,22 @@ let connection: Connection;
 let testConnectionOptions: ConnectionOptions;
 
 const schema = 'synctest';
+const port = extractNumberEnvVar('QUERYDB_PORT');
+const username = extractStringEnvVar('QUERYDB_USERNAME');
+const host = extractStringEnvVar('QUERYDB_HOST');
+const password = extractStringEnvVar('QUERYDB_PASSWD');
+const database = extractStringEnvVar('QUERYDB_DATABASE');
+const connectionProfile = extractStringEnvVar('CONNECTION_PROFILE');
+const adminId = extractStringEnvVar('ADMIN_ID');
+const adminSecret = extractStringEnvVar('ADMIN_SECRET');
 const connectionOptions: ConnectionOptions = {
   name: 'default',
   type: 'postgres' as any,
-  host: process.env.QUERYDB_HOST,
-  port: parseInt(process.env.QUERYDB_PORT, 10),
-  username: process.env.QUERYDB_USERNAME,
-  password: process.env.QUERYDB_PASSWD,
-  database: process.env.QUERYDB_DATABASE,
+  host,
+  port,
+  username,
+  password,
+  database,
   logging: true,
   synchronize: false,
   dropSchema: false,
@@ -59,7 +74,7 @@ beforeAll(async () => {
 
   // Loading connection profile
   try {
-    const pathToConnectionProfile = path.join(process.cwd(), process.env.CONNECTION_PROFILE);
+    const pathToConnectionProfile = path.join(process.cwd(), connectionProfile);
     const file = fs.readFileSync(pathToConnectionProfile);
     const loadedFile: unknown = yaml.load(file);
     if (isConnectionProfile(loadedFile)) profile = loadedFile;
@@ -84,8 +99,10 @@ beforeAll(async () => {
     connection = await createConnection(testConnectionOptions);
 
     fabric = createFabricGateway(profile, {
-      adminId: process.env.ADMIN_ID,
-      adminSecret: process.env.ADMIN_SECRET,
+      adminId,
+      adminSecret,
+      discovery: true,
+      asLocalhost: true,
       connection,
       logger,
       messageCenter,

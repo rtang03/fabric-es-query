@@ -4,7 +4,7 @@ import path from 'path';
 import util from 'util';
 import yaml from 'js-yaml';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
-import { createFabricGateway, isCommitRecord } from '../../fabric';
+import { createFabricGateway } from '../../fabric';
 import { FabricWallet } from '../../fabric/entities';
 import { createMessageCenter } from '../../message';
 import { createQueryDb } from '../../querydb';
@@ -16,7 +16,15 @@ import type {
   ConnectionProfile,
   Repository,
 } from '../../types';
-import { isConnectionProfile, logger, waitSecond } from '../../utils';
+import {
+  extractNumberEnvVar,
+  extractStringEnvVar,
+  isCommit,
+  isConnectionProfile,
+  logger,
+  waitSecond,
+} from '../../utils';
+import { ERROR } from '../constants';
 import { createRepository } from '../createRepository';
 
 /**
@@ -32,18 +40,35 @@ let repo: Repository;
 let defaultConnection: Connection;
 let connection: Connection;
 let testConnectionOptions: ConnectionOptions;
+let commitId1: string;
+let commitId0: string;
+let commitId1_private: string;
+let commitId0_private: string;
 
-const entityName = 'dev_entity';
-const entityId = 'ent_dev_';
+const dev_entityName = 'dev_entity';
+const dev_entityId = 'ent_dev_';
+const entityName = 'repotest';
+const entityId = `repotest${Math.floor(Math.random() * 10000)}`;
+const entityId_private = `repotestprivate${Math.floor(Math.random() * 10000)}`;
+const events = [{ type: 'User', payload: { name: 'me' } }];
+const events_2 = [{ type: 'User', payload: { name: 'me too' } }];
 const schema = 'repotest';
+const port = extractNumberEnvVar('QUERYDB_PORT');
+const username = extractStringEnvVar('QUERYDB_USERNAME');
+const host = extractStringEnvVar('QUERYDB_HOST');
+const password = extractStringEnvVar('QUERYDB_PASSWD');
+const database = extractStringEnvVar('QUERYDB_DATABASE');
+const connectionProfile = extractStringEnvVar('CONNECTION_PROFILE');
+const adminId = extractStringEnvVar('ADMIN_ID');
+const adminSecret = extractStringEnvVar('ADMIN_SECRET');
 const connectionOptions: ConnectionOptions = {
   name: 'default',
   type: 'postgres' as any,
-  host: process.env.QUERYDB_HOST,
-  port: parseInt(process.env.QUERYDB_PORT, 10),
-  username: process.env.QUERYDB_USERNAME,
-  password: process.env.QUERYDB_PASSWD,
-  database: process.env.QUERYDB_DATABASE,
+  host,
+  port,
+  username,
+  password,
+  database,
   logging: true,
   synchronize: false,
   dropSchema: false,
@@ -59,7 +84,7 @@ beforeAll(async () => {
 
   // Loading connection profile
   try {
-    const pathToConnectionProfile = path.join(process.cwd(), process.env.CONNECTION_PROFILE);
+    const pathToConnectionProfile = path.join(process.cwd(), connectionProfile);
     const file = fs.readFileSync(pathToConnectionProfile);
     const loadedFile: unknown = yaml.load(file);
     if (isConnectionProfile(loadedFile)) profile = loadedFile;
@@ -84,8 +109,10 @@ beforeAll(async () => {
     connection = await createConnection(testConnectionOptions);
 
     fabric = createFabricGateway(profile, {
-      adminId: process.env.ADMIN_ID,
-      adminSecret: process.env.ADMIN_SECRET,
+      adminId,
+      adminSecret,
+      discovery: true,
+      asLocalhost: true,
       connection,
       logger,
       messageCenter,
@@ -111,7 +138,7 @@ beforeAll(async () => {
   try {
     await fabric.initialize();
 
-    repo = createRepository({ fabric, queryDb, logger, messageCenter, timeoutMs: 1500 });
+    repo = createRepository({ fabric, queryDb, logger, messageCenter, timeoutMs: 4000 });
   } catch (e) {
     logger.error('fail to createRepository: ', e);
     process.exit(1);
@@ -121,51 +148,190 @@ beforeAll(async () => {
 afterAll(async () => {
   messageCenter.getMessagesObs().unsubscribe();
   await defaultConnection.close();
-  fabric.disconnect();
-  await queryDb.disconnect();
-  await waitSecond(2);
+  await connection.close();
+  await fabric.disconnect();
+  // wait until timeout promise is done
+  await waitSecond(4);
 });
 
-describe('repo tests', () => {
-  // it('fail to cmd_getByEntityName: invalid entityName', async () =>
-  //   repo
-  //     .cmd_getByEntityName('abcd')
-  //     .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
-  //
-  // it('cmd_getByEntityName', async () =>
-  //   repo.cmd_getByEntityName(entityName).then(({ status, data }) => {
-  //     expect(status).toEqual('ok');
-  //     expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1', 'ent_dev_org2']);
-  //   }));
+describe('repo failure tests', () => {
+  it('fail to cmd_getByEntityName: invalid entityName', async () =>
+    repo
+      .cmd_getByEntityName('abcd')
+      .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
 
-  // it('fail to cmd_getByEntityNameEntityId: invalid entityName', async () =>
-  //   repo
-  //     .cmd_getByEntityNameEntityId('abcd', entityId)
-  //     .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
-  //
-  // it('fail to cmd_getByEntityNameEntityId: invalid entityId', async () =>
-  //   repo
-  //     .cmd_getByEntityNameEntityId(entityName, 'efgh')
-  //     .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
-  //
-  // it('cmd_getByEntityNameEntityId', async () =>
-  //   repo.cmd_getByEntityNameEntityId(entityName, entityId).then(({ status, data }) => {
-  //     expect(status).toEqual('ok');
-  //     expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1', 'ent_dev_org2']);
-  //   }));
+  it('cmd_getByEntityName', async () =>
+    repo.cmd_getByEntityName(dev_entityName).then(({ status, data }) => {
+      expect(status).toEqual('ok');
+      expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1', 'ent_dev_org2']);
+    }));
 
-  // it('fail to cmd_getByEntityNameEntityId: invalid entityName', async () =>
-  //   repo
-  //     .cmd_getByEntityNameEntityIdCommitId(entityName, entityId, 'abcd')
-  //     .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
-  //
-  // it('cmd_getByEntityNameEntityId', async () =>
-  //   repo
-  //     .cmd_getByEntityNameEntityIdCommitId(entityName, entityId, 'ent_dev_org1')
-  //     .then(({ status, data }) => {
-  //       expect(status).toEqual('ok');
-  //       expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1']);
-  //     }));
+  it('fail to cmd_getByEntityNameEntityId: invalid entityName', async () =>
+    repo
+      .cmd_getByEntityNameEntityId('abcd', dev_entityId)
+      .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
 
+  it('fail to cmd_getByEntityNameEntityId: invalid entityId', async () =>
+    repo
+      .cmd_getByEntityNameEntityId(dev_entityName, 'efgh')
+      .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
 
+  it('cmd_getByEntityNameEntityId', async () =>
+    repo.cmd_getByEntityNameEntityId(dev_entityName, dev_entityId).then(({ status, data }) => {
+      expect(status).toEqual('ok');
+      expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1', 'ent_dev_org2']);
+    }));
+
+  it('fail to cmd_getByEntityNameEntityId: invalid entityName', async () =>
+    repo
+      .cmd_getByEntityNameEntityIdCommitId(dev_entityName, dev_entityId, 'abcd')
+      .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
+
+  it('cmd_getByEntityNameEntityId', async () =>
+    repo
+      .cmd_getByEntityNameEntityIdCommitId(dev_entityName, dev_entityId, 'ent_dev_org1')
+      .then(({ status, data }) => {
+        expect(status).toEqual('ok');
+        expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1']);
+      }));
+
+  it('fail to cmd_create: invalid: invalid character', async () =>
+    repo
+      .cmd_create({ entityName: '_abc+=', id: entityId, version: 0, events }, false)
+      .catch((error) => expect(error.message).toEqual(ERROR.ALPHA_NUMERIC_REQUIRED)));
+});
+
+describe('repo tests - public data', () => {
+  it('cmd_create', async () =>
+    repo
+      .cmd_create({ entityName, id: entityId, version: 0, events }, false)
+      .then(({ status, data }) => {
+        expect(status).toEqual('ok');
+        expect(isCommit(data)).toBeTruthy();
+
+        commitId0 = data.commitId;
+      }));
+
+  it('cmd_getByEntityNameEntityId', async () =>
+    repo.cmd_getByEntityNameEntityId(entityName, entityId).then(({ status, data }) => {
+      expect(status).toEqual('ok');
+      data.forEach((commit) => {
+        commit.events.map(({ payload }) => {
+          expect(payload.timestamp).toBeDefined();
+          expect(payload.name).toEqual('me');
+        });
+        expect(isCommit(commit)).toBeTruthy();
+      });
+    }));
+
+  it('cmd_append', async () =>
+    repo
+      .cmd_append({ entityName, id: entityId, events: events_2 }, false)
+      .then(({ status, data }) => {
+        expect(status).toEqual('ok');
+        expect(isCommit(data)).toBeTruthy();
+
+        commitId1 = data.commitId;
+      }));
+
+  it('cmd_getByEntityNameEntityId', async () =>
+    repo.cmd_getByEntityNameEntityId(entityName, entityId).then(({ status, data }) => {
+      expect(data[1].version).toEqual(1);
+      expect(data.map(({ events }) => events.map(({ payload }) => payload.name))).toEqual([
+        ['me'],
+        ['me too'],
+      ]);
+      expect(status).toEqual('ok');
+    }));
+
+  it('cmd_deleteByEntityIdCommitId', async () =>
+    repo
+      .cmd_deleteByEntityIdCommitId(entityName, entityId, commitId0, false)
+      .then(({ status }) => expect(status).toEqual('ok')));
+
+  it('cmd_getByEntityNameEntityId', async () =>
+    repo.cmd_getByEntityNameEntityId(entityName, entityId).then(({ status, data }) => {
+      expect(data.length).toEqual(1);
+      expect(data[0].version).toEqual(1);
+      expect(status).toEqual('ok');
+    }));
+
+  it('cmd_deleteByEntityId', async () =>
+    repo
+      .cmd_deleteByEntityId(entityName, entityId)
+      .then(({ status }) => expect(status).toEqual('ok')));
+
+  it('cmd_getByEntityNameEntityId', async () =>
+    repo.cmd_getByEntityNameEntityId(entityName, entityId).then(({ status, data }) => {
+      expect(data).toEqual([]);
+      expect(status).toEqual('ok');
+    }));
+});
+
+describe('repo test - private data', () => {
+  it('cmd_create', async () =>
+    repo
+      .cmd_create({ entityName, id: entityId_private, version: 0, events }, true)
+      .then(({ status, data }) => {
+        expect(status).toEqual('ok');
+        expect(isCommit(data)).toBeTruthy();
+
+        commitId0_private = data.commitId;
+      }));
+
+  it('cmd_getByEntityNameEntityId', async () =>
+    repo
+      .cmd_getByEntityNameEntityId(entityName, entityId_private, true)
+      .then(({ status, data }) => {
+        expect(status).toEqual('ok');
+        expect(data[0].id).toEqual(entityId_private);
+        expect(data[0].version).toEqual(0);
+        data.forEach((commit) => {
+          commit.events.map(({ payload }) => {
+            expect(payload.timestamp).toBeDefined();
+            expect(payload.name).toEqual('me');
+          });
+          expect(isCommit(commit)).toBeTruthy();
+        });
+      }));
+
+  it('cmd_append', async () =>
+    repo
+      .cmd_append({ entityName, id: entityId_private, events: events_2 }, true)
+      .then(({ status, data }) => {
+        expect(status).toEqual('ok');
+        expect(isCommit(data)).toBeTruthy();
+
+        commitId1_private = data.commitId;
+      }));
+
+  it('cmd_getByEntityNameEntityId', async () =>
+    repo
+      .cmd_getByEntityNameEntityId(entityName, entityId_private, true)
+      .then(({ status, data }) => {
+        expect(data[1].version).toEqual(1);
+        expect(data.map(({ events }) => events.map(({ payload }) => payload.name))).toEqual([
+          ['me'],
+          ['me too'],
+        ]);
+        expect(status).toEqual('ok');
+      }));
+
+  it('cmd_deleteByEntityIdCommitId - commit0', async () =>
+    repo
+      .cmd_deleteByEntityIdCommitId(entityName, entityId_private, commitId0_private, true)
+      .then(({ status }) => expect(status).toEqual('ok')));
+
+  it('cmd_deleteByEntityIdCommitId - commit1', async () =>
+    repo
+      .cmd_deleteByEntityIdCommitId(entityName, entityId_private, commitId1_private, true)
+      .then(({ status }) => expect(status).toEqual('ok')));
+
+  it('cmd_getByEntityNameEntityId - should be []', async () =>
+    repo
+      .cmd_getByEntityNameEntityId(entityName, entityId_private, true)
+      .then(({ status, data }) => {
+        expect(data).toEqual([]);
+        expect(status).toEqual('ok');
+      }));
 });

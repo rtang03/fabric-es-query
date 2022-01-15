@@ -32,6 +32,8 @@ export type CreateFabricGatewayOption = {
   adminSecret: string;
   adminId: string;
   connection: Connection;
+  discovery: boolean;
+  asLocalhost: boolean;
   logger: winston.Logger;
   meters?: Partial<Meters>;
   tracer?: Tracer;
@@ -43,7 +45,17 @@ export const createFabricGateway: (
   option: CreateFabricGatewayOption
 ) => FabricGateway = (
   profile,
-  { adminId, adminSecret, connection, logger, meters, tracer, messageCenter: mCenter }
+  {
+    adminId,
+    adminSecret,
+    connection,
+    logger,
+    discovery,
+    asLocalhost,
+    meters,
+    tracer,
+    messageCenter: mCenter,
+  }
 ) => {
   let wallet: Wallet;
   let identity: Identity;
@@ -54,12 +66,14 @@ export const createFabricGateway: (
   let caAdminUserContext: User;
   let isGatewayConnected: boolean;
   let network: Network;
+  let nonDiscoveryNetwork: Network;
 
   logger.info('Loading configuration');
 
   const NS = 'fabric:gateway';
   const debug = Debug(NS);
   const gateway = new Gateway();
+  const nonDiscoveryGateway = new Gateway();
 
   /* === LOADING CONFIGURATION === */
   const caName = profile.organizations?.[profile.client?.organization]?.certificateAuthorities[0];
@@ -176,8 +190,9 @@ export const createFabricGateway: (
     /**
      * disconnect
      */
-    disconnect: () => {
+    disconnect: async () => {
       gateway.disconnect();
+      nonDiscoveryGateway.disconnect();
     },
     /**
      * getDefaultChannelName
@@ -247,6 +262,10 @@ export const createFabricGateway: (
      */
     getNetwork: () => network,
     /**
+     * getNonDiscoveryNetwork
+     */
+    getNonDiscoveryNetwork: () => nonDiscoveryNetwork,
+    /**
      * initialize
      * - configure EventHandlerStrategies and QueryHandlerStrategies
      * - enroll (not register) CA admin
@@ -312,21 +331,40 @@ export const createFabricGateway: (
         const options: GatewayOptions = {
           identity: adminId,
           wallet,
-          discovery: { enabled: false },
+          discovery: { enabled: discovery, asLocalhost },
           eventHandlerOptions: option?.eventHandlerOptions || defaultEventHandlerOptions,
           queryHandlerOptions: option?.queryHandlerOptions || defaultQueryHandlerOptions,
           'connection-options': option?.connectionOptions,
         };
 
+        /**
+         * For public data use
+         */
         await gateway.connect(profile, options);
 
-        logger.info('🔥 gatwway connected');
+        logger.info('gatwway connected');
 
         isGatewayConnected = true;
 
         network = await gateway.getNetwork(defaultChannel);
 
-        logger.info('🔥 network returned');
+        logger.info('network returned');
+
+        /**
+         * For private data use
+         */
+        const nonDiscoveryOptions: GatewayOptions = {
+          ...options,
+          discovery: { enabled: false, asLocalhost },
+        };
+
+        await nonDiscoveryGateway.connect(profile, nonDiscoveryOptions);
+
+        logger.info('non-discovery gatwway connected');
+
+        nonDiscoveryNetwork = await nonDiscoveryGateway.getNetwork(defaultChannel);
+
+        logger.info('non-discovery network returned');
 
         traceEnabled && span.end();
 

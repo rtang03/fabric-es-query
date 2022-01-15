@@ -45,7 +45,6 @@ export const isCommit = (input: any): input is Commit =>
   input?.commitId !== undefined &&
   input?.entityId !== undefined &&
   input?.entityName !== undefined &&
-  input?.events !== undefined &&
   input?.version !== undefined;
 
 export const isIncident = (input: any): input is Incident =>
