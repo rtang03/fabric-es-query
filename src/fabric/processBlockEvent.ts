@@ -118,7 +118,6 @@ export const processBlockEvent = (
           block.metadata.metadata[common.BlockMetadataIndex.TRANSACTIONS_FILTER][index]
         )
       : '';
-    // const envelope_signature = txObj?.signature?.toString('hex');
 
     const payload_extension = txObj.payload?.header?.channel_header?.extension?.toString('hex');
 

@@ -23,5 +23,8 @@ export const connectionOptions = {
 export const CODE = {
   PUBLIC_COMMIT: 1,
   PRIVATE_COMMIT: 2,
+  ERROR: 96,
+  INVALID_RESPONSE: 97,
+  TEST: 98,
   UNKNOWN: 99,
 };

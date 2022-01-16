@@ -29,7 +29,7 @@ import { createSynchronizer } from '../createSynchronizer';
 /**
  * Running:
  * 1. cd && ./run.sh
- * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.explorer.yaml -f compose.ot.yaml up -d --no-recreate
+ * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.ot.yaml up -d --no-recreate
  */
 let messageCenter: MessageCenter;
 let synchronizer: Synchronizer;
@@ -149,7 +149,7 @@ afterAll(async () => {
   await synchronizer.stop();
   messageCenter.getMessagesObs().unsubscribe();
   await defaultConnection.close();
-  fabric.disconnect();
+  await fabric.disconnect();
   await queryDb.disconnect();
   await waitSecond(1);
 });

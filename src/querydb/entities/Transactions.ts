@@ -63,14 +63,38 @@ export class Transactions {
   endorser_signature: string;
 
   setData?(data) {
-    this.code =
-      data.validation_code === 'VALID' && data.status === 200
-        ? (data.chaincode_proposal_input as string).startsWith('createCommit')
-          ? CODE.PUBLIC_COMMIT
-          : (data.chaincode_proposal_input as string).startsWith('privatedata:createCommit')
-          ? CODE.PRIVATE_COMMIT
-          : CODE.UNKNOWN
-        : CODE.UNKNOWN;
+    const ccInput: string = data.chaincode_proposal_input;
+    if (data.validation_code === 'VALID' && data.status === 200) {
+      if (
+        // created via inside-chaincode logic
+        ccInput.startsWith('createCommit,dev_entity') ||
+        ccInput.startsWith('privatedata:createCommit,private_entityName') ||
+        // created via unit-test.
+        // Notice that all unit test should use 'dev_entity' as entityName
+        ccInput.startsWith('eventstore:createCommit,dev_entity') ||
+        ccInput.startsWith('privatedata:createCommit,dev_entity') ||
+        ccInput.startsWith('eventstore:deleteByEntityId,dev_entity') ||
+        ccInput.startsWith('eventstore:deleteByEntityIdCommitId,dev_entity') ||
+        ccInput.startsWith('privatedata:deleteByEntityIdCommitId,dev_entity')
+      ) {
+        this.code = CODE.TEST;
+      } else if (ccInput.startsWith('eventstore:createCommit')) {
+        this.code = CODE.PUBLIC_COMMIT;
+      } else if (ccInput.startsWith('privatedata:createCommit')) {
+        this.code = CODE.PRIVATE_COMMIT;
+      } else if (
+        // abnormal situation. It should not happen. Just-in-case logic
+        ccInput.startsWith('eventstore:deleteByEntityId') ||
+        ccInput.startsWith('eventstore:deleteByEntityIdCommitId') ||
+        ccInput.startsWith('privatedata:deleteByEntityIdCommitId')
+      ) {
+        this.code = CODE.ERROR;
+      } else {
+        // unknown situation
+        this.code = CODE.UNKNOWN;
+      }
+    } else this.code = CODE.INVALID_RESPONSE;
+
     this.blockid = data.blockid;
     this.txhash = data.txhash;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument

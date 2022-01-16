@@ -549,7 +549,18 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
 
       try {
         if (!isTransactions(tx)) {
-          logger.error('unexpected error: invalid transaction format');
+          const errorMessage = 'unexpected error: invalid transaction format';
+          logger.error(errorMessage);
+
+          mCenter?.notify({
+            kind: KIND.ERROR,
+            title: MSG.INSERT_TX_FAIL,
+            desc,
+            error: errorMessage,
+            broadcast,
+            save,
+          });
+
           return null;
         }
 

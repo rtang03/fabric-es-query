@@ -6,7 +6,7 @@ import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import fetch from 'isomorphic-unfetch';
 import yaml from 'js-yaml';
-import rimraf from 'rimraf';
+import { range } from 'lodash';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import { createMessageCenter } from '../../message';
 import type { ConnectionProfile, FabricGateway, MessageCenter } from '../../types';
@@ -72,16 +72,6 @@ beforeAll(async () => {
     complete: () => console.log('subscription completed'),
   });
 
-  // removing pre-existing wallet
-  try {
-    await new Promise((resolve, reject) =>
-      rimraf(path.join(__dirname, '__wallet__'), (err) => (err ? reject(err) : resolve(true)))
-    );
-  } catch {
-    console.error('fail to remove wallet');
-    process.exit(1);
-  }
-
   try {
     metrics = createMetricServer('my-meter', {
       filterMeters: [METERS.ENROLL_COUNT, METERS.QUERYBLOCK_COUNT],
@@ -138,7 +128,7 @@ afterAll(async () => {
   await defaultConnection.close();
   await connection.close();
   messageCenter.getMessagesObs().unsubscribe();
-  fg.disconnect();
+  await fg.disconnect();
   await waitSecond(2);
   await metrics.meterProvider.shutdown();
   await metrics.exporter.stopServer();
@@ -174,7 +164,7 @@ describe('fabricGateway tests', () => {
     }));
 
   // generated for other tests
-  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach((blockNum) => {
+  range(11).forEach((blockNum) => {
     it(`queryBlock - ${blockNum}`, async () =>
       fg.queryBlock(fg.getDefaultChannelName(), blockNum).then(async (result) => {
         const fs = require('fs');

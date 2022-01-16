@@ -83,6 +83,7 @@ export const createFabricGateway: (
   const mspId = profile.organizations?.[profile.client?.organization]?.mspid;
   const channels = Object.keys(profile.channels);
   const defaultChannel = Object.keys(profile.channels)?.[0];
+  // currently, there is only one channel event hub
   const channelEventHubs: Record<string, BlockListener> = {};
 
   !caName && logger.error('missing caName');
@@ -399,11 +400,11 @@ export const createFabricGateway: (
               // notify synchronizer
               newBlock$.next({ id: parseFloat(`99.${blocknum}`), blocknum, timestamp: new Date() });
 
-              mCenter?.notify<BlockEvent>({
+              mCenter?.notify<number>({
                 kind: KIND.SYSTEM,
                 title: MSG.BLOCK_ARRIVAL,
                 desc: `blocknum ${event.blockNumber} arrives`,
-                data: event,
+                data: Number(event.blockNumber),
                 broadcast,
                 save,
               });

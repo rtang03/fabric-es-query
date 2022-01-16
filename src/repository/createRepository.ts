@@ -60,6 +60,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
         timestamp: Math.round(new Date().getTime()),
       },
     }));
+  const devTest = 'dev_entity';
 
   return {
     /**
@@ -70,7 +71,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param isPrivateData
      */
     cmd_append: ({ entityName, id, events }, isPrivateData) => {
-      if (!validator.isAlphanumeric(entityName))
+      if (entityName !== devTest && !validator.isAlphanumeric(entityName))
         return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
 
       if (!validator.isAlphanumeric(id))
@@ -124,7 +125,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param isPrivateData
      */
     cmd_create: ({ entityName, id, events, version }, isPrivateData) => {
-      if (!validator.isAlphanumeric(entityName))
+      if (entityName !== devTest && !validator.isAlphanumeric(entityName))
         return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
 
       if (!validator.isAlphanumeric(id))
@@ -169,7 +170,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param id
      */
     cmd_deleteByEntityId: async (entityName, id) => {
-      if (!validator.isAlphanumeric(entityName))
+      if (entityName !== devTest && !validator.isAlphanumeric(entityName))
         return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
 
       if (!validator.isAlphanumeric(id))
@@ -217,7 +218,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param isPrivateData
      */
     cmd_deleteByEntityIdCommitId: (entityName, id, commitId, isPrivateData) => {
-      if (!validator.isAlphanumeric(entityName))
+      if (entityName !== devTest && !validator.isAlphanumeric(entityName))
         return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
 
       if (!validator.isAlphanumeric(id))
@@ -369,7 +370,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
         const result = await withTimeout(
           queryDb.findCommit({
             entityName,
-            id: entityId,
+            entityId,
             orderBy,
             skip,
             sort,

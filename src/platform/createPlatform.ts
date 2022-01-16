@@ -3,10 +3,23 @@ import omit from 'lodash/omit';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import winston from 'winston';
 import WebSocket from 'ws';
+import { createFabricGateway } from '../fabric';
+import { FabricWallet } from '../fabric/entities';
+import { createMessageCenter } from '../message';
 import { createQueryDb } from '../querydb';
 import { Blocks, Commit, KeyValue, Transactions } from '../querydb/entities';
-import type { ConnectionProfile, FabricGateway, Platform, PlatformConfig, QueryDb } from '../types';
-import { FabricWallet } from '../fabric/entities';
+import { createRepository } from '../repository';
+import { createSynchronizer } from '../sync/createSynchronizer';
+import type {
+  ConnectionProfile,
+  FabricGateway,
+  MessageCenter,
+  Platform,
+  PlatformConfig,
+  QueryDb,
+  Repository,
+  Synchronizer,
+} from '../types';
 
 export type CreatePlatformOption = {
   profile: ConnectionProfile;
@@ -24,12 +37,15 @@ export const createPlatform: (option: CreatePlatformOption) => Platform = ({
   wsEnabled,
   logger,
 }) => {
-  const NS = 'utils:createPlatform';
+  const NS = 'platform';
   const debug = Debug(NS);
 
   let queryDb: QueryDb;
   let connection: Connection;
-  let fabricGateway: FabricGateway;
+  let fabric: FabricGateway;
+  let synchronizer: Synchronizer;
+  let messageCenter: MessageCenter;
+  let repository: Repository;
 
   logger.info(`=== starting platform ===`);
   const connectionOption: ConnectionOptions = {

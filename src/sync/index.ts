@@ -1,3 +1,3 @@
 export * from './constants';
-export * from './createSynchronizer';
 export * from './dispatcher';
+// export * from './createSynchronizer';

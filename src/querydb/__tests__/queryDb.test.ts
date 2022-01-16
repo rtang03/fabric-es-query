@@ -30,7 +30,7 @@ import { c1, c2 } from './__utils__/data';
 /**
  * Running:
  * 1. cd && ./run.sh
- * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.explorer.yaml -f compose.ot.yaml up -d --no-recreate
+ * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.ot.yaml up -d --no-recreate
  */
 let messageCenter: MessageCenter;
 let queryDb: QueryDb;

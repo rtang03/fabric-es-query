@@ -26,8 +26,8 @@ export const submit: (
     if (args[4]) input_args.push(args[4]);
     else input_args.push('');
   }
-
-  const transaction = network.getContract('eventstore').createTransaction(fcn);
+  const contract = network.getContract('eventstore');
+  const transaction = contract.createTransaction(fcn);
   const txName = transaction.getName();
   const txId = transaction.getTransactionId();
   const broadcast = true;

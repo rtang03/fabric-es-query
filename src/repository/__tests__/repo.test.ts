@@ -9,12 +9,14 @@ import { FabricWallet } from '../../fabric/entities';
 import { createMessageCenter } from '../../message';
 import { createQueryDb } from '../../querydb';
 import { Blocks, Commit, KeyValue, Transactions } from '../../querydb/entities';
+import { createSynchronizer } from '../../sync/createSynchronizer';
 import type {
   MessageCenter,
   QueryDb,
   FabricGateway,
   ConnectionProfile,
   Repository,
+  Synchronizer,
 } from '../../types';
 import {
   extractNumberEnvVar,
@@ -30,7 +32,7 @@ import { createRepository } from '../createRepository';
 /**
  * Running:
  * 1. cd && ./run.sh
- * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.explorer.yaml -f compose.ot.yaml up -d --no-recreate
+ * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.ot.yaml up -d --no-recreate
  */
 let messageCenter: MessageCenter;
 let fabric: FabricGateway;
@@ -44,11 +46,14 @@ let commitId1: string;
 let commitId0: string;
 let commitId1_private: string;
 let commitId0_private: string;
+let synchronizer: Synchronizer;
 
+// used by built-in chaincode logic
 const dev_entityName = 'dev_entity';
 const dev_entityId = 'ent_dev_';
-const entityName = 'repotest';
-const entityId = `repotest${Math.floor(Math.random() * 10000)}`;
+// used by this test
+const entityName = 'dev_entity';
+const entityId = `devtest${Math.floor(Math.random() * 10000)}`;
 const entityId_private = `repotestprivate${Math.floor(Math.random() * 10000)}`;
 const events = [{ type: 'User', payload: { name: 'me' } }];
 const events_2 = [{ type: 'User', payload: { name: 'me too' } }];
@@ -143,15 +148,37 @@ beforeAll(async () => {
     logger.error('fail to createRepository: ', e);
     process.exit(1);
   }
+
+  // Sync
+  try {
+    // 300 sec is long enough so that this test suite will finish before regular sync start
+    synchronizer = createSynchronizer(300, {
+      persist: false,
+      initialTimeoutMs: 2000,
+      initialShowStateChanges: false,
+      dev: false,
+      fabric,
+      queryDb,
+      logger,
+    });
+
+    void synchronizer.start().then(() => true);
+
+    await fabric.initializeChannelEventHubs(synchronizer.getNewBlockObs());
+  } catch (e) {
+    logger.error('fail to createSynchronizer: ', e);
+    process.exit(1);
+  }
 });
 
 afterAll(async () => {
+  await waitSecond(5);
+  await synchronizer.stop();
   messageCenter.getMessagesObs().unsubscribe();
   await defaultConnection.close();
   await connection.close();
   await fabric.disconnect();
-  // wait until timeout promise is done
-  await waitSecond(4);
+  await waitSecond(2);
 });
 
 describe('repo failure tests', () => {
@@ -333,5 +360,51 @@ describe('repo test - private data', () => {
       .then(({ status, data }) => {
         expect(data).toEqual([]);
         expect(status).toEqual('ok');
+      }));
+});
+
+describe('query tests, after sync completes', () => {
+  // long enough for first syncJob to complete
+  // repeated tests accumulated more blocks, the below time may need increased.
+  // And, the total increases correspondingly.
+  it('dummy wait for sync to complete', async () => await waitSecond(60));
+
+  // return first two of eventstore:createCommit
+  it('query_getByEntityName: use dev_entity (return first 2 commits)', async () =>
+    repo
+      .query_getByEntityName({ entityName, take: 2, skip: 0, sort: 'ASC', orderBy: 'commitId' })
+      .then(({ status, data }) => {
+        expect(status).toEqual('ok');
+        expect(data.items.map(({ entityName }) => entityName)).toEqual([entityName, entityName]);
+      }));
+
+  // return build-in chaincode dev_entity
+  it('query_getByEntityNameEntityId: use dev_entityId (return 2x commits)', async () =>
+    repo
+      .query_getByEntityNameEntityId({
+        entityName,
+        entityId: dev_entityId,
+        take: 2,
+        skip: 0,
+        sort: 'ASC',
+        orderBy: 'commitId',
+      })
+      .then(({ status, data }) => {
+        expect(status).toEqual('ok');
+        expect(data.total).toEqual(2);
+        expect(data.items.map(({ entityId }) => entityId)).toEqual([dev_entityId, dev_entityId]);
+      }));
+
+  // return build-in chaincode dev_entity
+  it('query_getByEntityNameEntityIdCommitId: use ent_dev_ & ent_dev_org1', async () =>
+    repo
+      .query_getByEntityNameEntityIdCommitId({
+        entityName,
+        entityId: dev_entityId,
+        commitId: 'ent_dev_org1',
+      })
+      .then(({ status, data }) => {
+        expect(data.total).toEqual(1);
+        expect(data.items.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1']);
       }));
 });

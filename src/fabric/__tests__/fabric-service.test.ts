@@ -19,7 +19,7 @@ import { FabricWallet } from '../entities';
 /**
  * Running:
  * 1. cd && ./run.sh
- * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.explorer.yaml -f compose.ot.yaml up -d --no-recreate
+ * 2. docker-compose -f compose.1org.yaml -f compose.2org.yaml -f compose.cc.org1.yaml -f compose.cc.org2.yaml -f compose.ot.yaml up -d --no-recreate
  */
 let fg: FabricGateway;
 let profile: ConnectionProfile;
@@ -107,7 +107,7 @@ afterAll(async () => {
   await defaultConnection.close();
   await connection.close();
   newBlock$.complete();
-  fg.disconnect();
+  await fg.disconnect();
   await waitSecond(2);
 });
 

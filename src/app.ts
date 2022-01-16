@@ -14,14 +14,18 @@ import type { ConnectionProfile, Platform, PlatformConfig } from './types';
 import {
   createHttpServer,
   createMetricServer,
+  extractNumberEnvVar,
+  extractStringEnvVar,
   isConnectionProfile,
   isPlatformConfig,
   logger,
   type Meters,
 } from './utils';
 
-const PORT: number = (process.env.PORT && parseInt(process.env.PORT, 10)) || 3000;
-const HOST = process.env.HOST || 'localhost';
+const PORT = extractNumberEnvVar('PORT') || 3000;
+const HOST = extractStringEnvVar('HOST') || 'localhost';
+const connectionProfile = extractStringEnvVar('CONNECTION_PROFILE');
+const platformConfig = extractStringEnvVar('PLATFORM_CONFIG');
 
 let server: http.Server;
 let profile: ConnectionProfile;
@@ -60,7 +64,7 @@ const start = async () => {
 
   logger.info('Loading connection profile');
   try {
-    const file = fs.readFileSync(path.join(process.cwd(), process.env.CONNECTION_PROFILE));
+    const file = fs.readFileSync(path.join(process.cwd(), connectionProfile));
     const loadedFile: unknown = yaml.load(file);
     if (isConnectionProfile(loadedFile)) profile = loadedFile;
     else {
@@ -74,7 +78,7 @@ const start = async () => {
 
   logger.info('Loading configuration');
   try {
-    const file = fs.readFileSync(path.join(process.cwd(), process.env.PLATFORM_CONFIG));
+    const file = fs.readFileSync(path.join(process.cwd(), platformConfig));
     const loadedFile: unknown = yaml.load(file);
     if (isPlatformConfig(loadedFile)) config = loadedFile;
     else {
@@ -140,7 +144,7 @@ const start = async () => {
   logger.info('Platform initialized');
 
   server.listen(PORT, () => {
-    logger.info(`🚀  rest server started at port: http://${HOST}:${PORT}`);
+    logger.info(`🚀  rest server started at port: ${HOST}:${PORT}`);
   });
 };
 
