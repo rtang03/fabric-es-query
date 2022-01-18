@@ -1,11 +1,14 @@
 import util from 'util';
 import Debug from 'debug';
+import Status from 'http-status';
+import fetch from 'isomorphic-unfetch';
 import { type Observer, ReplaySubject, Subscription } from 'rxjs';
 import { map, filter } from 'rxjs/operators';
 import { Connection } from 'typeorm';
 import winston from 'winston';
 import WebSocket from 'ws';
-import type { MessageCenter, Message, PaginatedIncident } from '../types';
+import type { MessageCenter, Message, PaginatedIncident, NewCommitNotify } from '../types';
+import { MSG } from './constant';
 import { Incident } from './entities';
 
 export type CreateMessageCenterOptions = {
@@ -14,6 +17,8 @@ export type CreateMessageCenterOptions = {
   broadcaster?: WebSocket.Server;
   windowTime?: number;
   bufferSize?: number;
+  notifyNewCommit?: boolean;
+  newCommitEndpoint?: string;
   logger: winston.Logger;
 };
 
@@ -23,9 +28,12 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
   bufferSize,
   broadcaster,
   connection,
+  newCommitEndpoint,
+  notifyNewCommit,
   logger,
 }) => {
-  let subscription: Subscription;
+  let processMessageSub: Subscription;
+  let notifyNewCommitSub: Subscription;
   const _bufferSize = bufferSize || 3;
   const _windowTime = windowTime || 10;
 
@@ -33,44 +41,46 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
   logger.info(`windowTime: ${_windowTime}`);
   logger.info(`bufferSize: ${_bufferSize}`);
   logger.info(`persist: ${persist}`);
+  logger.info(`newCommitEndpoint: ${newCommitEndpoint}`);
+  logger.info(`notifyNewCommit: ${notifyNewCommit}`);
   logger.info(`broadcaster: ${!!broadcaster}`);
 
   const NS = 'mcenter';
-  const $messages = new ReplaySubject<Message>(_bufferSize, _windowTime);
+  const messageReplaySubject = new ReplaySubject<Message>(_bufferSize, _windowTime);
 
   if (persist)
-    subscription = $messages
-      .pipe(
-        filter(({ save }) => save),
-        map((x) => x)
-      )
-      .subscribe({
-        next: async (m) => {
-          const incident = new Incident();
-          incident.kind = m.kind || '';
-          incident.title = m.title;
-          incident.desc = m.desc || '';
-          incident.status = m.status || '';
-          incident.data = m.data;
-          incident.timestamp = m.timestamp;
-          incident.canignore = false;
-          if (m.error instanceof Error) {
-            incident.errormsg = m.error.message;
-            incident.errorstack = m.error.stack;
-          }
-          try {
-            const result = await connection.getRepository(Incident).save(incident);
+    processMessageSub = messageReplaySubject.subscribe({
+      next: async (m) => {
+        if (!m.save) {
+          logger.info(util.format('📨 message received: %j', m));
+          return;
+        }
 
-            logger.info(`incident #${result.id} saved`);
-          } catch (e) {
-            logger.error(`incident not saved`);
-          }
-        },
-        error: (e) => logger.error(`${NS} subscription error: `, e),
-        complete: () => logger.info(`${NS} subscription completed`),
-      });
+        const incident = new Incident();
+        incident.kind = m.kind || '';
+        incident.title = m.title;
+        incident.desc = m.desc || '';
+        incident.status = m.status || '';
+        incident.data = m.data;
+        incident.timestamp = m.timestamp;
+        incident.read = false;
+        if (m.error instanceof Error) {
+          incident.errormsg = m.error.message;
+          incident.errorstack = m.error.stack;
+        }
+        try {
+          const result = await connection.getRepository(Incident).save(incident);
+
+          logger.info(`incident #${result.id} saved`);
+        } catch (e) {
+          logger.error(`incident not saved`);
+        }
+      },
+      error: (e) => logger.error(`${NS} subscription error: `, e),
+      complete: () => logger.info(`${NS} subscription completed`),
+    });
   else
-    subscription = $messages
+    processMessageSub = messageReplaySubject
       .pipe(
         filter(({ save }) => !save),
         map(({ kind, title, desc, timestamp }) => ({ kind, title, desc, timestamp }))
@@ -81,6 +91,38 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
         complete: () => logger.info('subscription completed'),
       });
 
+  if (notifyNewCommit && !!newCommitEndpoint) {
+    notifyNewCommitSub = messageReplaySubject
+      .pipe(filter<Message<NewCommitNotify>>(({ title }) => title === MSG.NOTIFY_WRITESIDE))
+      .subscribe({
+        next: async ({ data }) => {
+          const errorMsg = `fail to notify ${newCommitEndpoint}`;
+          try {
+            logger.info('new commit arrives');
+
+            const result = await fetch(newCommitEndpoint, {
+              method: 'POST',
+              body: JSON.stringify(data),
+            });
+
+            if (result?.status === Status.OK) {
+              logger.info(
+                `notify, block: ${data?.blocknum}, entityName: ${data?.entityName}, entityId: ${data?.entityId}`
+              );
+            } else
+              logger.error(
+                util.format('%s, statusCode: %s, %j'),
+                errorMsg,
+                result?.status,
+                await result.text()
+              );
+          } catch (e) {
+            logger.error(util.format('%s, %j', errorMsg, e));
+          }
+        },
+      });
+  }
+
   return {
     /**
      * disconnect
@@ -90,6 +132,9 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
       await connection.close();
 
       logger.info(`${NS} disconnected`);
+
+      notifyNewCommitSub?.unsubscribe();
+      processMessageSub?.unsubscribe();
     },
     /**
      * getIncidents
@@ -150,11 +195,11 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
     /**
      * getMessagesObs
      */
-    getMessagesObs: () => $messages,
+    getMessagesObs: () => messageReplaySubject,
     /**
      * getSubscription
      */
-    getSubscription: () => subscription,
+    getSubscription: () => processMessageSub,
     /**
      * isConnected
      */
@@ -170,11 +215,11 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
      * notify
      * @param message
      */
-    notify: (message) => $messages.next({ ...message, timestamp: new Date() }),
+    notify: (message) => messageReplaySubject.next({ ...message, timestamp: new Date() }),
     /**
      * subscribe
      * @param observer
      */
-    subscribe: (observer: Partial<Observer<Message>>) => $messages.subscribe(observer),
+    subscribe: (observer: Partial<Observer<Message>>) => messageReplaySubject.subscribe(observer),
   };
 };

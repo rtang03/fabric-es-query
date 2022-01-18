@@ -13,6 +13,7 @@ export const MSG = {
   UNVERIFIED_BLOCK_FOUND: 'unverified block found',
   UNVERIFIED_BLOCK_DELTED: 'unverified block deleted',
   CASCADED_DELETE_ERROR: 'cascadedDeleteByBlocknum',
+  NOTIFY_WRITESIDE: 'notify writeside',
   // notify by fabricGateway
   CHANNEL_HEIGHT: 'latest channel height',
   BLOCK_ARRIVAL: 'block arrives',

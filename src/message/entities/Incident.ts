@@ -1,6 +1,6 @@
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
-@Entity('incident')
+@Entity('message')
 export class Incident {
   @PrimaryGeneratedColumn({ type: 'int' })
   id: number;
@@ -30,5 +30,8 @@ export class Incident {
   timestamp: Date;
 
   @Column({ type: 'boolean', nullable: true })
-  canignore: boolean;
+  read: boolean;
+
+  @Column({ type: 'boolean', nullable: true })
+  expired: boolean;
 }

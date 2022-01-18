@@ -4,6 +4,7 @@ import { isEqual, range, takeRight, tail } from 'lodash';
 import { KIND, MSG } from '../../message';
 import { parseWriteSet } from '../../querydb';
 import { Blocks, Commit, Transactions } from '../../querydb/entities';
+import { NewCommitNotify } from '../../types';
 import { withTimeout, waitSecond } from '../../utils';
 import type { TAction } from '../dispatcher';
 import type { RootModel } from '.';
@@ -532,14 +533,15 @@ export const syncJob = createModel<RootModel>()({
            */
           CURRENT = 'step6f';
           errorMsg = 'fail to insert commit';
+          let commit: Commit = null;
           try {
             const inputCommit = parseWriteSet(txInserted, logger);
             if (inputCommit) {
               dispatch.syncJob.setBlockHasCommit([blocknum, `${CURRENT}:setBlockHasCommit`]);
 
-              const data = new Commit();
-              data.setData(inputCommit);
-              const result = await queryDb.insertCommit(data);
+              commit = new Commit();
+              commit.setData(inputCommit);
+              const result = await queryDb.insertCommit(commit);
 
               if (!result) {
                 notifyMessageCenterWhenError(blocknum);
@@ -615,10 +617,22 @@ export const syncJob = createModel<RootModel>()({
             catchErrorAndDispatchFailure(CURRENT, e, errorMsg);
             return;
           }
+
+          /**
+           * step 6i: notify writeside
+           */
+          if (commit) {
+            const { entityName, entityId, commitId, blocknum } = commit;
+            mCenter?.notify<NewCommitNotify>({
+              kind: KIND.SYSTEM,
+              title: MSG.NOTIFY_WRITESIDE,
+              data: { entityName, entityId, commitId, blocknum, timestamp: new Date() },
+            });
+          }
         }
 
         /**
-         * step 6i: complete
+         * step 7: complete
          */
         CURRENT = 'step6i';
         dispatch.syncJob.setCompleted([blocknum, `${CURRENT}:setCompleted`]);

@@ -12,6 +12,7 @@ export * from './TBlock';
 export * from './MessageCenter';
 export * from './Paginated';
 export * from './Repository';
+export * from './NewCommitNoify';
 
 export type PaginatedIncident = Paginated<Incident>;
 export type PaginatedCommit = Paginated<Commit>;

@@ -1,6 +1,6 @@
 import { Incident } from '../message/entities';
 import { Blocks, Commit, Transactions } from '../querydb/entities';
-import type { ConnectionProfile, PlatformConfig } from '../types';
+import type { ConnectionProfile, NewCommitNotify, PlatformConfig } from '../types';
 
 export const isConnectionProfile = (input: any): input is ConnectionProfile =>
   input?.channels !== undefined &&
@@ -49,3 +49,9 @@ export const isCommit = (input: any): input is Commit =>
 
 export const isIncident = (input: any): input is Incident =>
   input?.title !== undefined && input?.timestamp !== undefined;
+
+export const isNewCommitNotify = (input: any): input is NewCommitNotify =>
+  input?.entityName !== undefined &&
+  input?.entityId !== undefined &&
+  input?.commitId !== undefined &&
+  input?.blockNum !== undefined;

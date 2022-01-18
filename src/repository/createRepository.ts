@@ -29,7 +29,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
 
   logger.info('Preparing repository');
   logger.info(`fabric: ${!!fabric}`);
-  logger.info(`queryDb: ${queryDb.isConnected()}`);
+  logger.info(`queryDb: ${queryDb?.isConnected()}`);
   logger.info(`request timeout (ms): ${timeoutMs}`);
 
   const catchError = async (me: string, fcn: (fcnName?: string) => Promise<RepoResponse>) => {

@@ -1,5 +1,4 @@
 import { type Observer, ReplaySubject, Subscription } from 'rxjs';
-import { Connection } from 'typeorm';
 import { PaginatedIncident } from './index';
 
 export type Message<T = any> = {
