@@ -184,39 +184,49 @@ afterAll(async () => {
 describe('repo failure tests', () => {
   it('fail to cmd_getByEntityName: invalid entityName', async () =>
     repo
-      .cmd_getByEntityName('abcd')
+      .cmd_getByEntityName({ entityName: 'abcd' })
       .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
 
   it('cmd_getByEntityName', async () =>
-    repo.cmd_getByEntityName(dev_entityName).then(({ status, data }) => {
+    repo.cmd_getByEntityName({ entityName: dev_entityName }).then(({ status, data }) => {
       expect(status).toEqual('ok');
       expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1', 'ent_dev_org2']);
     }));
 
   it('fail to cmd_getByEntityNameEntityId: invalid entityName', async () =>
     repo
-      .cmd_getByEntityNameEntityId('abcd', dev_entityId)
+      .cmd_getByEntityNameEntityId({ entityName: 'abcd', id: dev_entityId })
       .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
 
   it('fail to cmd_getByEntityNameEntityId: invalid entityId', async () =>
     repo
-      .cmd_getByEntityNameEntityId(dev_entityName, 'efgh')
+      .cmd_getByEntityNameEntityId({ entityName: dev_entityName, id: 'efgh' })
       .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
 
   it('cmd_getByEntityNameEntityId', async () =>
-    repo.cmd_getByEntityNameEntityId(dev_entityName, dev_entityId).then(({ status, data }) => {
-      expect(status).toEqual('ok');
-      expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1', 'ent_dev_org2']);
-    }));
+    repo
+      .cmd_getByEntityNameEntityId({ entityName: dev_entityName, id: dev_entityId })
+      .then(({ status, data }) => {
+        expect(status).toEqual('ok');
+        expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1', 'ent_dev_org2']);
+      }));
 
   it('fail to cmd_getByEntityNameEntityId: invalid entityName', async () =>
     repo
-      .cmd_getByEntityNameEntityIdCommitId(dev_entityName, dev_entityId, 'abcd')
+      .cmd_getByEntityNameEntityIdCommitId({
+        entityName: dev_entityName,
+        id: dev_entityId,
+        commitId: 'abcd',
+      })
       .then((result) => expect(result).toEqual({ status: 'ok', data: [] })));
 
   it('cmd_getByEntityNameEntityId', async () =>
     repo
-      .cmd_getByEntityNameEntityIdCommitId(dev_entityName, dev_entityId, 'ent_dev_org1')
+      .cmd_getByEntityNameEntityIdCommitId({
+        entityName: dev_entityName,
+        id: dev_entityId,
+        commitId: 'ent_dev_org1',
+      })
       .then(({ status, data }) => {
         expect(status).toEqual('ok');
         expect(data.map(({ commitId }) => commitId)).toEqual(['ent_dev_org1']);
@@ -240,7 +250,7 @@ describe('repo tests - public data', () => {
       }));
 
   it('cmd_getByEntityNameEntityId', async () =>
-    repo.cmd_getByEntityNameEntityId(entityName, entityId).then(({ status, data }) => {
+    repo.cmd_getByEntityNameEntityId({ entityName, id: entityId }).then(({ status, data }) => {
       expect(status).toEqual('ok');
       data.forEach((commit) => {
         commit.events.map(({ payload }) => {
@@ -262,7 +272,7 @@ describe('repo tests - public data', () => {
       }));
 
   it('cmd_getByEntityNameEntityId', async () =>
-    repo.cmd_getByEntityNameEntityId(entityName, entityId).then(({ status, data }) => {
+    repo.cmd_getByEntityNameEntityId({ entityName, id: entityId }).then(({ status, data }) => {
       expect(data[1].version).toEqual(1);
       expect(data.map(({ events }) => events.map(({ payload }) => payload.name))).toEqual([
         ['me'],
@@ -273,11 +283,11 @@ describe('repo tests - public data', () => {
 
   it('cmd_deleteByEntityIdCommitId', async () =>
     repo
-      .cmd_deleteByEntityIdCommitId(entityName, entityId, commitId0, false)
+      .cmd_deleteByEntityIdCommitId({ entityName, id: entityId, commitId: commitId0 }, false)
       .then(({ status }) => expect(status).toEqual('ok')));
 
   it('cmd_getByEntityNameEntityId', async () =>
-    repo.cmd_getByEntityNameEntityId(entityName, entityId).then(({ status, data }) => {
+    repo.cmd_getByEntityNameEntityId({ entityName, id: entityId }).then(({ status, data }) => {
       expect(data.length).toEqual(1);
       expect(data[0].version).toEqual(1);
       expect(status).toEqual('ok');
@@ -285,11 +295,11 @@ describe('repo tests - public data', () => {
 
   it('cmd_deleteByEntityId', async () =>
     repo
-      .cmd_deleteByEntityId(entityName, entityId)
+      .cmd_deleteByEntityId({ entityName, id: entityId })
       .then(({ status }) => expect(status).toEqual('ok')));
 
   it('cmd_getByEntityNameEntityId', async () =>
-    repo.cmd_getByEntityNameEntityId(entityName, entityId).then(({ status, data }) => {
+    repo.cmd_getByEntityNameEntityId({ entityName, id: entityId }).then(({ status, data }) => {
       expect(data).toEqual([]);
       expect(status).toEqual('ok');
     }));
@@ -308,7 +318,7 @@ describe('repo test - private data', () => {
 
   it('cmd_getByEntityNameEntityId', async () =>
     repo
-      .cmd_getByEntityNameEntityId(entityName, entityId_private, true)
+      .cmd_getByEntityNameEntityId({ entityName, id: entityId_private }, true)
       .then(({ status, data }) => {
         expect(status).toEqual('ok');
         expect(data[0].id).toEqual(entityId_private);
@@ -334,7 +344,7 @@ describe('repo test - private data', () => {
 
   it('cmd_getByEntityNameEntityId', async () =>
     repo
-      .cmd_getByEntityNameEntityId(entityName, entityId_private, true)
+      .cmd_getByEntityNameEntityId({ entityName, id: entityId_private }, true)
       .then(({ status, data }) => {
         expect(data[1].version).toEqual(1);
         expect(data.map(({ events }) => events.map(({ payload }) => payload.name))).toEqual([
@@ -346,17 +356,23 @@ describe('repo test - private data', () => {
 
   it('cmd_deleteByEntityIdCommitId - commit0', async () =>
     repo
-      .cmd_deleteByEntityIdCommitId(entityName, entityId_private, commitId0_private, true)
+      .cmd_deleteByEntityIdCommitId(
+        { entityName, id: entityId_private, commitId: commitId0_private },
+        true
+      )
       .then(({ status }) => expect(status).toEqual('ok')));
 
   it('cmd_deleteByEntityIdCommitId - commit1', async () =>
     repo
-      .cmd_deleteByEntityIdCommitId(entityName, entityId_private, commitId1_private, true)
+      .cmd_deleteByEntityIdCommitId(
+        { entityName, id: entityId_private, commitId: commitId1_private },
+        true
+      )
       .then(({ status }) => expect(status).toEqual('ok')));
 
   it('cmd_getByEntityNameEntityId - should be []', async () =>
     repo
-      .cmd_getByEntityNameEntityId(entityName, entityId_private, true)
+      .cmd_getByEntityNameEntityId({ entityName, id: entityId_private }, true)
       .then(({ status, data }) => {
         expect(data).toEqual([]);
         expect(status).toEqual('ok');

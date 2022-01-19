@@ -1,6 +1,33 @@
 sync:
-  # second
   syncDuration: 5
+  requestTimeoutMs: 2000
+  showStateChanges: false
+  devMode: false
+  persist: false
+fabric:
+  orgAdminId: admin-org1.net
+  orgAdminSecret: admin-org1.netPW
+  asLocalhost: true
+  discovery: true
 querydb:
-  host: "localhost"
-  port: "15432"
+  connectionName: 'default'
+  schema: 'public'
+  type: 'postgres'
+  host: 'localhost'
+  port: 15432
+  database: 'eventstore'
+  username: 'postgres'
+  password: 'docker'
+  logging: false
+  connectTimeoutMS: 10000
+metricserver:
+  host: 'localhost'
+  port: 9000
+  interval: 1000
+messageCenter:
+  newCommitEndpoint:
+  notifyNewCommit: false
+  persist: true
+  websocketEnabled: false
+repo:
+  requestTimeoutMs: 2000

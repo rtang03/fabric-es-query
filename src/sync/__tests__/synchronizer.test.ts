@@ -149,6 +149,7 @@ afterAll(async () => {
   await synchronizer.stop();
   messageCenter.getMessagesObs().unsubscribe();
   await defaultConnection.close();
+  await connection.close();
   await fabric.disconnect();
   await queryDb.disconnect();
   await waitSecond(1);

@@ -2,7 +2,6 @@ require('dotenv').config({ path: 'src/fabric/__tests__/.env.fabricgateway' });
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
-import rimraf from 'rimraf';
 import { Subject } from 'rxjs';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import type { ConnectionProfile, FabricGateway, SyncJob } from '../../types';
@@ -53,16 +52,6 @@ const connectionOptions: ConnectionOptions = {
 };
 
 beforeAll(async () => {
-  // removing pre-existing wallet
-  try {
-    await new Promise((resolve, reject) =>
-      rimraf(path.join(__dirname, '__wallet__'), (err) => (err ? reject(err) : resolve(true)))
-    );
-  } catch {
-    console.error('fail to remove wallet');
-    process.exit(1);
-  }
-
   // Loading connection profile
   try {
     const pathToConnectionProfile = path.join(process.cwd(), connectionProfile);

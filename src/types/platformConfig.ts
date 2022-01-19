@@ -1,6 +1,20 @@
 export type PlatformConfig = {
-  sync: { syncDuration: number };
+  sync: {
+    syncDuration: number;
+    requestTimeoutMs?: number;
+    showStateChanges?: boolean;
+    devMode?: boolean;
+    persist?: boolean;
+  };
+  fabric?: {
+    orgAdminId?: string;
+    orgAdminSecret?: string;
+    discovery?: boolean;
+    asLocalhost?: boolean;
+  };
   querydb: {
+    connectionName?: string;
+    schema?: string;
     type?: string;
     port: number;
     host: string;
@@ -14,5 +28,14 @@ export type PlatformConfig = {
     port?: number;
     host?: string;
     interval: number;
+  };
+  messageCenter?: {
+    newCommitEndpoint?: string;
+    notifyNewCommit?: boolean;
+    persist?: boolean;
+    websocketEnabled?: boolean;
+  };
+  repo?: {
+    requestTimeoutMs?: number;
   };
 };

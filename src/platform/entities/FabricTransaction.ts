@@ -1,5 +1,9 @@
 import { Column, PrimaryGeneratedColumn, Entity } from 'typeorm';
 
+/**
+ * Command side to record his submission
+ * NOT implemented yet
+ */
 @Entity('fabrictx')
 export class FabricTransaction {
   @PrimaryGeneratedColumn({ type: 'int' })

@@ -13,6 +13,7 @@ import { Blocks, Commit, KeyValue, Transactions } from './entities';
 
 export type CreateQueryDbOption = {
   connection: Connection;
+  // used for dev/test only
   nonDefaultSchema?: string;
   broadcaster?: WebSocket.Server;
   logger: winston.Logger;
@@ -28,7 +29,7 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
   logger,
   messageCenter: mCenter,
 }) => {
-  logger.info('Preparing query db');
+  logger.info('=== Preparing query db ===');
 
   if (!connection?.isConnected) {
     logger.error('no psql connection found');
@@ -88,6 +89,8 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
     }
   };
   // End parse one write_set
+
+  logger.info('=== query db ok ===');
 
   return {
     /**
@@ -209,7 +212,6 @@ export const createQueryDb: (option: CreateQueryDbOption) => QueryDb = ({
      * disconnect
      */
     disconnect: async () => {
-      await connection.close();
       logger.info(`querydb disconnected`);
 
       meters?.queryDbConnected.add(-1);

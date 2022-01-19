@@ -12,19 +12,18 @@ import { dispatcher, type DispatcherResult } from './dispatcher';
 import { store } from './store';
 
 export type CreateSynchronizerOption = {
-  persist?: boolean;
-  initialTimeoutMs?: number;
-  initialShowStateChanges?: boolean;
-  connection?: Promise<Connection>;
-  fabric?: Partial<FabricGateway>;
-  queryDb?: QueryDb;
   broadcaster?: WebSocket.Server;
-  logger: winston.Logger;
-  meters?: Partial<Meters>;
-  tracer?: Tracer;
-  messageCenter?: MessageCenter;
-  initialMaxSyncHeight?: number;
   dev?: boolean; // if true, no job dispatching
+  fabric: Partial<FabricGateway>;
+  initialMaxSyncHeight?: number;
+  initialTimeoutMs: number;
+  initialShowStateChanges?: boolean;
+  logger: winston.Logger;
+  messageCenter?: MessageCenter;
+  meters?: Partial<Meters>;
+  persist?: boolean;
+  queryDb: QueryDb;
+  tracer?: Tracer;
 };
 
 /**
@@ -34,7 +33,6 @@ export type CreateSynchronizerOption = {
  * @param fabric
  * @param queryDb
  * @param broadcaster
- * @param connection
  * @param logger
  * @param dev
  * @param initialTimeoutMs
@@ -52,7 +50,6 @@ export const createSynchronizer: (
     fabric,
     queryDb,
     broadcaster,
-    connection,
     logger,
     dev,
     initialTimeoutMs,
@@ -71,7 +68,6 @@ export const createSynchronizer: (
   const stop$ = new Subject<SyncJob>();
   const newBlock$ = new Subject<SyncJob>();
 
-  let conn: Connection;
   let syncTime = initialSyncTime;
   let timeout = initialTimeoutMs;
   let showStateChanges = initialShowStateChanges;
@@ -82,7 +78,7 @@ export const createSynchronizer: (
   let regularSyncSubscription: Subscription;
   let maxSyncHeight = initialMaxSyncHeight || SYNC_ALL_BLOCKS;
 
-  logger.info('Preparing synchronizer');
+  logger.info('=== Preparing synchronizer ===');
   logger.info(`syncTime: ${initialSyncTime}`);
   logger.info(`maxSyncHeight: ${maxSyncHeight}`);
   logger.info(`timeout: ${initialTimeoutMs}`);
@@ -123,35 +119,9 @@ export const createSynchronizer: (
         return result;
       };
 
+  logger.info('=== repository ok ===');
+
   return {
-    /**
-     * connect
-     */
-    connect: async () => {
-      // sync connection
-      if (!persist) throw new Error('connect() is not available');
-
-      try {
-        logger.info('connecting database');
-
-        conn = await connection;
-
-        logger.info(`database connected`);
-        return conn;
-      } catch (e) {
-        logger.error(`fail to connect : `, e);
-        return null;
-      }
-    },
-    /**
-     * disconnect
-     */
-    disconnect: async () => {
-      if (!persist) throw new Error('disconnectSyncDb() is not available');
-
-      await conn.close();
-      logger.info(`${NS} disconnectSyncDb`);
-    },
     /**
      * getInfo
      */
@@ -181,21 +151,9 @@ export const createSynchronizer: (
       }
     },
     /**
-     * isConnected
-     */
-    isConnected: async () => {
-      if (!persist) throw new Error('isConnected() is not available');
-
-      if (!conn?.isConnected) {
-        logger.info(`${NS} is not connected`);
-        return false;
-      }
-      return true;
-    },
-    /**
      * isSyncJobActive
      */
-    isSyncJobActive: () => regularSyncSubscription.closed,
+    isSyncJobActive: () => !regularSyncSubscription.closed,
     /**
      * setMaxSyncHeight
      * @param maxHeight

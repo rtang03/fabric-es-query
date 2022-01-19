@@ -63,6 +63,7 @@ afterAll(async () => {
   mCenter.getSubscription().unsubscribe();
   mCenterWithSave.getSubscription().unsubscribe();
   await defaultConnection.close();
+  await connection.close();
   await mCenterWithSave.disconnect();
   await waitSecond(2);
 });

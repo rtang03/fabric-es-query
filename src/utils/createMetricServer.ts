@@ -21,7 +21,7 @@ export type Meters = {
 };
 
 export const createMetricServer: (
-  name,
+  name: string,
   option: MetricServerOptions
 ) => {
   meters: Partial<Meters>;
@@ -31,7 +31,7 @@ export const createMetricServer: (
   name,
   { interval, logger, exporterPort, exporterHost, exporterPrefix, exporterEndpoint, filterMeters }
 ) => {
-  logger.info('=== starting PrometheusExporter === ');
+  logger.info('=== Preparing metric server === ');
 
   const port = exporterPort || 9000;
   const host = exporterHost || 'localhost';
@@ -84,5 +84,6 @@ export const createMetricServer: (
 
   logger.info(`meters: ${Object.keys(meters).toString()}`);
 
+  logger.info('=== metric server ok === ');
   return { meters, exporter, meterProvider };
 };

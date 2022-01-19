@@ -152,7 +152,7 @@ afterAll(async () => {
   await synchronizer.stop();
   messageCenter.getMessagesObs().unsubscribe();
   await defaultConnection.close();
-  fabric.disconnect();
+  await fabric.disconnect();
   await queryDb.disconnect();
   await waitSecond(1);
 });
@@ -174,10 +174,12 @@ describe('sync tests', () => {
   });
 
   it('synchronizer start', async () => {
+    // TODO: IMPLEMENT LATER
     return true;
   });
 
   it('submit fabric tx', async () => {
+    // TODO: IMPLEMENT LATER, when submitting transaciont is ready
     return true;
   });
 });

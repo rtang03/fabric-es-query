@@ -1,5 +1,5 @@
 import { type Commit } from '../fabric/services/Commit';
-import { PaginatedCommit } from './index';
+import { type PaginatedCommit } from './index';
 
 export type FabricResponse = {
   status: string;
@@ -15,6 +15,12 @@ export type RepoResponse<TData = any> = {
   status: string;
 };
 
+export type AppendCommitPayload<TEvent> = {
+  entityName: string;
+  id: string;
+  events: TEvent[];
+};
+
 export type CreateCommitPayload<TEvent> = {
   entityName: string;
   id: string;
@@ -22,10 +28,62 @@ export type CreateCommitPayload<TEvent> = {
   events: TEvent[];
 };
 
-export type AppendCommitPayload<TEvent> = {
+export type DeleteByEntityIdPayload = {
   entityName: string;
   id: string;
-  events: TEvent[];
+};
+
+export type DeleteByEntityIdCommitIdPayload = {
+  entityName: string;
+  id: string;
+  commitId: string;
+};
+
+export type GetByEntityNamePayload = {
+  entityName: string;
+};
+
+export type GetByEntityNameEntityIdPayload = {
+  entityName: string;
+  id: string;
+};
+
+export type GetByEntityNameEntityIdCommitIdPayload = {
+  entityName: string;
+  id: string;
+  commitId: string;
+};
+
+export type QueryGetByEntityNameEntityIdPayload = {
+  entityName: string;
+  entityId: string;
+  take?: number;
+  skip?: number;
+  orderBy?: 'commitId' | 'entityId';
+  sort?: 'ASC' | 'DESC';
+};
+
+export type QueryGetByEntityNamePayload = {
+  entityName: string;
+  take?: number;
+  skip?: number;
+  orderBy?: 'commitId' | 'entityId';
+  sort?: 'ASC' | 'DESC';
+};
+
+export type QueryGetByEntNameEntIdCommitIdPayload = {
+  entityName: string;
+  entityId: string;
+  commitId: string;
+  take?: number;
+  skip?: number;
+  orderBy?: 'commitId' | 'entityId';
+  sort?: 'ASC' | 'DESC';
+};
+
+export type QueryCascadeDeletePayload = {
+  entityName: string;
+  entityId?: string;
 };
 
 export type Repository<TEvent = any> = {
@@ -37,51 +95,31 @@ export type Repository<TEvent = any> = {
     payload: CreateCommitPayload<TEvent>,
     isPrivateData?: boolean
   ) => Promise<RepoResponse<Commit>>;
-  cmd_deleteByEntityId: (entityName: string, id: string) => Promise<RepoResponse>;
+  cmd_deleteByEntityId: (payload: DeleteByEntityIdPayload) => Promise<RepoResponse>;
   cmd_deleteByEntityIdCommitId: (
-    entityName: string,
-    id: string,
-    commitId: string,
+    payload: DeleteByEntityIdCommitIdPayload,
     isPrivateData?: boolean
   ) => Promise<RepoResponse>;
   cmd_getByEntityName: (
-    entityName: string,
+    payload: GetByEntityNamePayload,
     isPrivateData?: boolean
   ) => Promise<RepoResponse<Commit[]>>;
   cmd_getByEntityNameEntityId: (
-    entityName: string,
-    id: string,
+    payload: GetByEntityNameEntityIdPayload,
     isPrivateData?: boolean
   ) => Promise<RepoResponse<Commit[]>>;
   cmd_getByEntityNameEntityIdCommitId: (
-    entityName: string,
-    id: string,
-    commitId: string,
+    payload: GetByEntityNameEntityIdCommitIdPayload,
     isPrivateData?: boolean
   ) => Promise<RepoResponse<Commit[]>>;
-  query_getByEntityName: (payload: {
-    entityName: string;
-    take?: number;
-    skip?: number;
-    orderBy?: 'commitId' | 'entityId';
-    sort?: 'ASC' | 'DESC';
-  }) => Promise<RepoResponse<PaginatedCommit>>;
-  query_getByEntityNameEntityId: (payload: {
-    entityName: string;
-    entityId: string;
-    take?: number;
-    skip?: number;
-    orderBy?: 'commitId' | 'entityId';
-    sort?: 'ASC' | 'DESC';
-  }) => Promise<RepoResponse<PaginatedCommit>>;
-  query_getByEntityNameEntityIdCommitId: (payload: {
-    entityName: string;
-    entityId: string;
-    commitId: string;
-    take?: number;
-    skip?: number;
-    orderBy?: 'commitId' | 'entityId';
-    sort?: 'ASC' | 'DESC';
-  }) => Promise<RepoResponse<PaginatedCommit>>;
-  query_cascadeDelete: (entityName: string, entityId?: string) => Promise<RepoResponse<number[]>>;
+  query_getByEntityName: (
+    payload: QueryGetByEntityNamePayload
+  ) => Promise<RepoResponse<PaginatedCommit>>;
+  query_getByEntityNameEntityId: (
+    payload: QueryGetByEntityNameEntityIdPayload
+  ) => Promise<RepoResponse<PaginatedCommit>>;
+  query_getByEntityNameEntityIdCommitId: (
+    payload: QueryGetByEntNameEntIdCommitIdPayload
+  ) => Promise<RepoResponse<PaginatedCommit>>;
+  query_cascadeDelete: (payload: QueryCascadeDeletePayload) => Promise<RepoResponse<number[]>>;
 };

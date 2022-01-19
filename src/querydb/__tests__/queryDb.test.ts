@@ -1,12 +1,10 @@
 require('dotenv').config({ path: 'src/querydb/__tests__/.env.querydb' });
-import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
-import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import fetch from 'isomorphic-unfetch';
 import { range } from 'lodash';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import { FabricWallet } from '../../fabric/entities';
 import { createMessageCenter } from '../../message';
-import type { QueryDb, MessageCenter } from '../../types';
+import type { QueryDb, MessageCenter, MetricServer } from '../../types';
 import {
   CODE,
   createMetricServer,
@@ -16,7 +14,6 @@ import {
   isCommit,
   isTransactions,
   logger,
-  type Meters,
   METERS,
   waitSecond,
 } from '../../utils';
@@ -37,11 +34,7 @@ let queryDb: QueryDb;
 let defaultConnection: Connection;
 let connection: Connection;
 let testConnectionOptions: ConnectionOptions;
-let metrics: {
-  meters: Partial<Meters>;
-  exporter: PrometheusExporter;
-  meterProvider: MeterProvider;
-};
+let metricServer: MetricServer;
 
 const schema = 'querydbtest';
 const noResult = { total: 0, items: [], hasMore: false, cursor: 0 };
@@ -69,7 +62,7 @@ beforeAll(async () => {
   messageCenter = createMessageCenter({ logger, persist: false });
 
   try {
-    metrics = createMetricServer('my-meter', {
+    metricServer = createMetricServer('my-meter', {
       interval: 1000,
       exporterHost: 'localhost',
       exporterPort: 9000,
@@ -96,7 +89,7 @@ beforeAll(async () => {
       logger,
       connection,
       nonDefaultSchema: schema,
-      meters: metrics.meters,
+      meters: metricServer.meters,
       messageCenter,
     });
   } catch (e) {
@@ -108,8 +101,9 @@ beforeAll(async () => {
 afterAll(async () => {
   messageCenter.getMessagesObs().unsubscribe();
   await defaultConnection.close();
+  await connection.close();
   await queryDb.disconnect();
-  await metrics.meterProvider.shutdown();
+  await metricServer.meterProvider.shutdown();
   await waitSecond(3);
 });
 

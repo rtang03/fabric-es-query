@@ -27,9 +27,9 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
   const nonDiscoveryNetwork = fabric.getNonDiscoveryNetwork();
   const NS = 'repo';
 
-  logger.info('Preparing repository');
+  logger.info('=== Preparing repository ===');
   logger.info(`fabric: ${!!fabric}`);
-  logger.info(`queryDb: ${queryDb?.isConnected()}`);
+  logger.info(`queryDb: ${!!queryDb}`);
   logger.info(`request timeout (ms): ${timeoutMs}`);
 
   const catchError = async (me: string, fcn: (fcnName?: string) => Promise<RepoResponse>) => {
@@ -61,6 +61,8 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
       },
     }));
   const devTest = 'dev_entity';
+
+  logger.info('=== repository ok ===');
 
   return {
     /**
@@ -169,7 +171,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param entityName
      * @param id
      */
-    cmd_deleteByEntityId: async (entityName, id) => {
+    cmd_deleteByEntityId: async ({ entityName, id }) => {
       if (entityName !== devTest && !validator.isAlphanumeric(entityName))
         return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
 
@@ -217,7 +219,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param commitId
      * @param isPrivateData
      */
-    cmd_deleteByEntityIdCommitId: (entityName, id, commitId, isPrivateData) => {
+    cmd_deleteByEntityIdCommitId: ({ entityName, id, commitId }, isPrivateData) => {
       if (entityName !== devTest && !validator.isAlphanumeric(entityName))
         return Promise.reject(new Error(ERROR.ALPHA_NUMERIC_REQUIRED));
 
@@ -276,7 +278,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param entityName
      * @param isPrivateData
      */
-    cmd_getByEntityName: (entityName, isPrivateData) => {
+    cmd_getByEntityName: ({ entityName }, isPrivateData) => {
       return catchError(
         isPrivateData ? 'privatedata:queryByEntityName' : 'eventstore:queryByEntityName',
         async (fcnName) => {
@@ -297,7 +299,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param id
      * @param isPrivateData
      */
-    cmd_getByEntityNameEntityId: (entityName, id, isPrivateData) => {
+    cmd_getByEntityNameEntityId: ({ entityName, id }, isPrivateData) => {
       return catchError(
         isPrivateData ? 'privatedata:queryByEntityId' : 'eventstore:queryByEntityId',
         async (fcnName) => {
@@ -319,7 +321,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param commitId
      * @param isPrivateData
      */
-    cmd_getByEntityNameEntityIdCommitId: (entityName, id, commitId, isPrivateData) => {
+    cmd_getByEntityNameEntityIdCommitId: ({ entityName, id, commitId }, isPrivateData) => {
       return catchError(
         isPrivateData
           ? 'privatedata:queryByEntityIdCommitId'
@@ -428,7 +430,7 @@ export const createRepository: (option: CreateRepositoryOption) => Repository = 
      * @param entityName
      * @param entityId
      */
-    query_cascadeDelete: (entityName, entityId) => {
+    query_cascadeDelete: ({ entityName, entityId }) => {
       return catchError('query_cascadeDeleteByEntityName', async (fcnName) => {
         // step 1: find corresponding commits
         const query = {

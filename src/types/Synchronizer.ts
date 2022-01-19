@@ -8,8 +8,6 @@ export type SyncJob = {
 };
 
 export type Synchronizer = {
-  connect: () => Promise<Connection>;
-  disconnect: () => Promise<void>;
   getInfo: () => {
     persist: boolean;
     syncTime: number;
@@ -19,7 +17,6 @@ export type Synchronizer = {
   };
   getNewBlockObs: () => Subject<SyncJob>;
   isBackendsReady: () => Promise<boolean>;
-  isConnected: () => Promise<boolean>;
   isSyncJobActive: () => boolean;
   setMaxSyncHeight: (maxheight: number) => void;
   start: (numberOfExecution?: number) => Promise<boolean>;

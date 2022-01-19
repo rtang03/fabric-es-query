@@ -37,7 +37,7 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
   const _bufferSize = bufferSize || 3;
   const _windowTime = windowTime || 10;
 
-  logger.info('Preparing message center');
+  logger.info('=== Preparing message center ===');
   logger.info(`windowTime: ${_windowTime}`);
   logger.info(`bufferSize: ${_bufferSize}`);
   logger.info(`persist: ${persist}`);
@@ -123,13 +123,15 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
       });
   }
 
+  logger.info('=== message center ok ===');
+
   return {
     /**
      * disconnect
      */
     disconnect: async () => {
-      if (!persist) throw new Error('disconnect() is not available');
-      await connection.close();
+      // if (!persist) throw new Error('disconnect() is not available');
+      // await connection.close();
 
       logger.info(`${NS} disconnected`);
 
@@ -191,7 +193,7 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
     /**
      * getInfo
      */
-    getInfo: () => ({ windowTime, bufferSize, persist }),
+    getInfo: () => ({ windowTime, bufferSize, persist, notifyNewCommit, newCommitEndpoint }),
     /**
      * getMessagesObs
      */

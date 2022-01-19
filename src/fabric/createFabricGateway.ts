@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import util from 'util';
 import api, { type Span, type Tracer } from '@opentelemetry/api';
 import Debug from 'debug';
 import FabricCAServices, { type IEnrollResponse } from 'fabric-ca-client';
@@ -14,7 +15,6 @@ import {
   DefaultEventHandlerStrategies,
   DefaultQueryHandlerStrategies,
   type BlockListener,
-  BlockEvent,
 } from 'fabric-network';
 import fabprotos from 'fabric-protos';
 import { Subject } from 'rxjs';
@@ -68,14 +68,12 @@ export const createFabricGateway: (
   let network: Network;
   let nonDiscoveryNetwork: Network;
 
-  logger.info('Loading configuration');
+  logger.info('=== Preparing fabric-gateway ===');
 
   const NS = 'fabric:gateway';
   const debug = Debug(NS);
   const gateway = new Gateway();
   const nonDiscoveryGateway = new Gateway();
-
-  /* === LOADING CONFIGURATION === */
   const caName = profile.organizations?.[profile.client?.organization]?.certificateAuthorities[0];
   const caUrl = profile.certificateAuthorities?.[caName]?.url;
   const caAdminId = profile.certificateAuthorities?.[caName]?.registrar[0]?.enrollId;
@@ -187,6 +185,8 @@ export const createFabricGateway: (
     isCaAdminInWallet = true;
   };
 
+  logger.info('=== fabric-gateway ok === ');
+
   return {
     /**
      * disconnect
@@ -279,7 +279,7 @@ export const createFabricGateway: (
       const me = 'initialize';
       const debugL2 = Debug(`${NS}:${me}`);
 
-      logger.info(`=== ${me}() ===`);
+      logger.info(`=== fabric-gateway:${me}() ===`);
 
       // Defaults
       const defaultEventHandlerOptions = {
@@ -367,12 +367,12 @@ export const createFabricGateway: (
 
         logger.info('non-discovery network returned');
 
-        traceEnabled && span.end();
+        traceEnabled && span?.end();
 
         return true;
       } catch (err) {
-        logger.error(`fail to ${me} : `, err);
-        return null;
+        logger.error(util.format(`fail to ${me}, %j`, err));
+        return false;
       }
     },
     /**

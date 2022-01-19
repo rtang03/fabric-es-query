@@ -2,21 +2,18 @@ require('dotenv').config({ path: 'src/fabric/__tests__/.env.fabricgateway' });
 import fs from 'fs';
 import path from 'path';
 import util from 'util';
-import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
-import { MeterProvider } from '@opentelemetry/sdk-metrics-base';
 import fetch from 'isomorphic-unfetch';
 import yaml from 'js-yaml';
 import { range } from 'lodash';
 import { Connection, type ConnectionOptions, createConnection } from 'typeorm';
 import { createMessageCenter } from '../../message';
-import type { ConnectionProfile, FabricGateway, MessageCenter } from '../../types';
+import type { MetricServer, ConnectionProfile, FabricGateway, MessageCenter } from '../../types';
 import {
   createMetricServer,
   extractNumberEnvVar,
   extractStringEnvVar,
   isConnectionProfile,
   logger,
-  type Meters,
   METERS,
   waitSecond,
 } from '../../utils';
@@ -34,11 +31,7 @@ let profile: ConnectionProfile;
 let defaultConnection: Connection;
 let connection: Connection;
 let testConnectionOptions: ConnectionOptions;
-let metrics: {
-  meters: Partial<Meters>;
-  exporter: PrometheusExporter;
-  meterProvider: MeterProvider;
-};
+let metricServer: MetricServer;
 
 const schema = 'fabrictest';
 const port = extractNumberEnvVar('PSQL_PORT');
@@ -73,7 +66,7 @@ beforeAll(async () => {
   });
 
   try {
-    metrics = createMetricServer('my-meter', {
+    metricServer = createMetricServer('my-meter', {
       filterMeters: [METERS.ENROLL_COUNT, METERS.QUERYBLOCK_COUNT],
       logger,
     });
@@ -115,7 +108,7 @@ beforeAll(async () => {
       asLocalhost: true,
       connection,
       logger,
-      meters: metrics.meters,
+      meters: metricServer.meters,
       messageCenter,
     });
   } catch {
@@ -130,8 +123,8 @@ afterAll(async () => {
   messageCenter.getMessagesObs().unsubscribe();
   await fg.disconnect();
   await waitSecond(2);
-  await metrics.meterProvider.shutdown();
-  await metrics.exporter.stopServer();
+  await metricServer.meterProvider.shutdown();
+  await metricServer.exporter.stopServer();
 });
 
 describe('fabricGateway tests', () => {
