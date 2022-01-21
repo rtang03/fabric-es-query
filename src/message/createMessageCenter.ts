@@ -24,8 +24,8 @@ export type CreateMessageCenterOptions = {
 
 export const createMessageCenter: (options: CreateMessageCenterOptions) => MessageCenter = ({
   persist,
-  windowTime,
-  bufferSize,
+  windowTime: _inputWindowTime,
+  bufferSize: _inputBufferSize,
   broadcaster,
   connection,
   newCommitEndpoint,
@@ -34,19 +34,19 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
 }) => {
   let processMessageSub: Subscription;
   let notifyNewCommitSub: Subscription;
-  const _bufferSize = bufferSize || 3;
-  const _windowTime = windowTime || 10;
+  const bufferSize = _inputBufferSize || 3;
+  const windowTime = _inputWindowTime || 10;
 
   logger.info('=== Preparing message center ===');
-  logger.info(`windowTime: ${_windowTime}`);
-  logger.info(`bufferSize: ${_bufferSize}`);
+  logger.info(`windowTime: ${windowTime}`);
+  logger.info(`bufferSize: ${bufferSize}`);
   logger.info(`persist: ${persist}`);
   logger.info(`newCommitEndpoint: ${newCommitEndpoint}`);
   logger.info(`notifyNewCommit: ${notifyNewCommit}`);
   logger.info(`broadcaster: ${!!broadcaster}`);
 
   const NS = 'mcenter';
-  const messageReplaySubject = new ReplaySubject<Message>(_bufferSize, _windowTime);
+  const messageReplaySubject = new ReplaySubject<Message>(bufferSize, windowTime);
 
   if (persist)
     processMessageSub = messageReplaySubject.subscribe({
@@ -76,7 +76,7 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
           logger.error(`incident not saved`);
         }
       },
-      error: (e) => logger.error(`${NS} subscription error: `, e),
+      error: (e) => logger.error(util.format(`${NS} subscription error: %j`, e)),
       complete: () => logger.info(`${NS} subscription completed`),
     });
   else

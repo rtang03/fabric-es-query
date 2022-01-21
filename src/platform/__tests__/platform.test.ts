@@ -118,6 +118,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await platform.disconnect();
+  await connection.close();
   await waitSecond(2);
 });
 
@@ -129,11 +130,19 @@ describe('platform test', () => {
 
   it('querydb is connected', async () => expect(platform.getQueryDb().isConnected()).toBeTruthy());
 
-  it('messageCenter getInfo', async () =>
-    expect(platform.getMessageCenter().getInfo().bufferSize).toBeDefined());
+  it('messageCenter getInfo', async () => {
+    expect(platform.getMessageCenter().getInfo().bufferSize).toBeDefined();
+  });
 
-  it('synchronizer is ready', async () => {
+  it('synchronizer is not ready before syncStart', async () => {
     expect(platform.getSynchronizer().isBackendsReady()).toBeTruthy();
-    expect(platform.getSynchronizer().isSyncJobActive()).toBeTruthy();
+    expect(platform.getSynchronizer().isSyncJobActive()).toBeFalsy();
+  });
+
+  it('sync start', async () => {
+    const synchronizer = platform.getSynchronizer();
+    await synchronizer.start(1);
+    await waitSecond(2);
+    await synchronizer.stop();
   });
 });

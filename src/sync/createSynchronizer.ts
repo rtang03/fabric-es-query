@@ -12,6 +12,7 @@ import { dispatcher, type DispatcherResult } from './dispatcher';
 import { store } from './store';
 
 export type CreateSynchronizerOption = {
+  channelName: string;
   broadcaster?: WebSocket.Server;
   dev?: boolean; // if true, no job dispatching
   fabric: Partial<FabricGateway>;
@@ -29,6 +30,7 @@ export type CreateSynchronizerOption = {
 /**
  *
  * @param initialSyncTime
+ * @param channelName
  * @param persist
  * @param fabric
  * @param queryDb
@@ -46,6 +48,7 @@ export const createSynchronizer: (
 ) => Synchronizer = (
   initialSyncTime,
   {
+    channelName,
     persist,
     fabric,
     queryDb,
@@ -59,13 +62,17 @@ export const createSynchronizer: (
   }
 ) => {
   // interval for checking job queue
-  const executionInterval = 1;
+  const executionInterval = 1; // per second
   const NS = 'sync';
   const LAST_JOB = -1;
+  // Synchronizing
   const SYNC_START = { type: 'syncJob/syncStart' };
   const syncJobMap = map<number, SyncJob>((id) => ({ id, timestamp: new Date() }));
+  // Emit execution action
   const execution$ = interval(executionInterval * 1000).pipe(syncJobMap);
+  // End the execution
   const stop$ = new Subject<SyncJob>();
+  // When new block arrives
   const newBlock$ = new Subject<SyncJob>();
 
   let syncTime = initialSyncTime;
@@ -100,6 +107,7 @@ export const createSynchronizer: (
       }
     : async (payload, option) => {
         const result = await dispatcher(SYNC_START, {
+          channelName,
           fabric,
           queryDb,
           logger,
@@ -119,7 +127,7 @@ export const createSynchronizer: (
         return result;
       };
 
-  logger.info('=== repository ok ===');
+  logger.info('=== synchronizer ok ===');
 
   return {
     /**
@@ -153,7 +161,7 @@ export const createSynchronizer: (
     /**
      * isSyncJobActive
      */
-    isSyncJobActive: () => !regularSyncSubscription.closed,
+    isSyncJobActive: () => !!regularSyncSubscription,
     /**
      * setMaxSyncHeight
      * @param maxHeight
@@ -166,14 +174,22 @@ export const createSynchronizer: (
     start: async (numberOfExecution) =>
       new Promise((resolve) => {
         const broadcast = true;
+
+        // counter of dispatching action
         let numberOfDispatch = 0;
 
-        // emit every 15 min, or initialSyncTime
+        if (!regularSync$ || !newBlock$) {
+          logger.error('No available observables. SyncJob will not start');
+          return false;
+        }
+
+        // emit every 15 sec, or initialSyncTime
         regularSyncSubscription = merge(regularSync$, newBlock$).subscribe(({ id, timestamp }) => {
           Debug(NS)(`dispatch regular syncJob, ${id} at ${timestamp}`);
 
           store.dispatch({ type: 'queue/newJob', payload: { id, kind: 'regular' } });
         });
+
         regularSyncSubscription.add(() => {
           logger.info('⛔️  regularSync tear down');
 
@@ -233,8 +249,8 @@ export const createSynchronizer: (
 
       await waitSecond(1);
 
-      regularSyncSubscription.unsubscribe();
-      executionSubscription.unsubscribe();
+      regularSyncSubscription?.unsubscribe();
+      executionSubscription?.unsubscribe();
 
       mCenter?.notify({ kind: KIND.INFO, title: MSG.SYNC_STOP, broadcast: true, save: false });
     },

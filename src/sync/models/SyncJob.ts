@@ -9,8 +9,6 @@ import { withTimeout, waitSecond } from '../../utils';
 import type { TAction } from '../dispatcher';
 import type { RootModel } from '.';
 
-const channelName = process.env.CHANNEL_NAME;
-
 type TSyncJob = 'sync' | 'arrival' | 'idle';
 type TStatus = 'active' | 'error' | 'none' | 'ok';
 
@@ -62,7 +60,7 @@ const TEMPLATE: SyncJobState = {
   unverifiedBlockDeleted: [],
 };
 
-const NS = 'sync';
+const NS = 'sync:exec';
 
 /**
  * Execution of one syncJob
@@ -209,6 +207,7 @@ export const syncJob = createModel<RootModel>()({
     },
     syncStart: async (payload: TAction['payload']) => {
       const me = 'syncStart';
+      const channelName = payload?.option?.channelName;
       const logger = payload?.option?.logger;
       const fabric = payload?.option?.fabric;
       const queryDb = payload?.option?.queryDb;
@@ -225,11 +224,23 @@ export const syncJob = createModel<RootModel>()({
           save: true,
         });
 
-      if (!fabric) throw new Error('fabric-gateway not found');
-      if (!queryDb) throw new Error('queryDb not found');
-      if (!channelName) throw new Error('channelName not found');
+      if (!fabric) {
+        logger.error('fabric-gateway not found');
+        throw new Error('fabric-gateway not found');
+      }
 
-      logger?.info(`=== redux-effect: ${me} ===`);
+      if (!queryDb) {
+        logger.error('queryDb not found');
+        throw new Error('queryDb not found');
+      }
+
+      if (!channelName) {
+        logger.error('channelName not found');
+        throw new Error('channelName not found');
+      }
+
+      console.log('********* 002');
+      logger?.info(`=== model:SyncJob:${me} ===`);
 
       let heightFabric: number;
       let heightQuerydb: number;

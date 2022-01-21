@@ -5,7 +5,7 @@
     "target": "es2021",
     "moduleResolution": "node",
     "esModuleInterop": true,
-    "module": "esnext",
+    "module": "commonjs",
     "declaration": true,
     "sourceMap": false,
     "types": ["node", "jest", "react-redux"],

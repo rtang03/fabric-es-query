@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import Status from 'http-status';
 import { isNewCommitNotify } from '../utils';
-import type { EntityRepo } from './EntityRepo';
+import { EntityRepo } from './types';
 
 export const createNewCommitHook = (repo: EntityRepo) => {
   const router = Router();
@@ -11,7 +11,7 @@ export const createNewCommitHook = (repo: EntityRepo) => {
 
     if (isNewCommitNotify(notify)) {
       // todo
-      await repo.upsert();
+      await repo.upsert(null);
     }
   });
 

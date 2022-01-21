@@ -1,4 +1,5 @@
 export type PlatformConfig = {
+  channelName?: string;
   sync: {
     syncDuration: number;
     requestTimeoutMs?: number;
@@ -21,7 +22,7 @@ export type PlatformConfig = {
     database?: string;
     username?: string;
     password?: string;
-    logging?: boolean;
+    logging?: any;
     connectTimeoutMS?: number;
   };
   metricserver?: {

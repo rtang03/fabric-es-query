@@ -7,17 +7,15 @@ import { type ConnectionOptions } from 'typeorm';
 import winston from 'winston';
 import { createActionsRoute } from '../routes/actions';
 import { type Platform } from '../types';
-import { logger } from './logger';
 
 type CreateHttpServerOption = {
-  connectionOptions: ConnectionOptions;
   platform: Platform;
   logger: winston.Logger;
 };
 
 export const createHttpServer: (
   option?: CreateHttpServerOption
-) => Promise<{ app: http.Server }> = async ({ platform }) => {
+) => Promise<{ app: http.Server }> = async ({ platform, logger }) => {
   const app = express();
 
   app.use(express.urlencoded({ extended: true }));

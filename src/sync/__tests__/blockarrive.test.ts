@@ -43,6 +43,7 @@ const database = extractStringEnvVar('QUERYDB_DATABASE');
 const connectionProfile = extractStringEnvVar('CONNECTION_PROFILE');
 const adminId = extractStringEnvVar('ADMIN_ID');
 const adminSecret = extractStringEnvVar('ADMIN_SECRET');
+const channelName = extractStringEnvVar('CHANNEL_NAME');
 const connectionOptions: ConnectionOptions = {
   name: 'default',
   type: 'postgres' as any,
@@ -133,6 +134,7 @@ beforeAll(async () => {
   try {
     // Notice that first sync job will be dispatched after initialSyncTime (2 second) is lapsed.
     synchronizer = createSynchronizer(2, {
+      channelName,
       persist: false,
       initialTimeoutMs: 1500,
       initialShowStateChanges: true,

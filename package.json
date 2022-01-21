@@ -25,11 +25,11 @@
     "test:sync-dispatcher": "jest dispatcher.test",
     "test:sync-restart": "DEBUG=sync* jest restart.test",
     "test:synchronizer": "DEBUG=sync* jest synchronizer.test",
-    "test:platform": "DEBUG=platform*,fabric*,querydb*,sync* jest platform.test",
+    "test:platform": "DEBUG=platform*,fabric*,sync* jest platform.test",
     "test:repo": "DEBUG=repo*,fabric* jest repo.test",
     "server": "node --require './dist/tracing.js' ./dist/app.js",
     "client": "node --experimental-modules ./dist/client.js",
-    "start": "node ./dist/sync.js"
+    "start": "yarn run build && node ./dist/app.js"
   },
   "dependencies": {
     "@godaddy/terminus": "^4.9.0",

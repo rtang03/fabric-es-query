@@ -11,7 +11,7 @@ import { FabricWallet } from './fabric/entities';
 import { Incident } from './message/entities';
 import { createPlatform } from './platform';
 import { Blocks, Commit, KeyValue, Transactions } from './querydb/entities';
-import type { ConnectionProfile, PlatformConfig } from './types';
+import type { ConnectionProfile, Platform, PlatformConfig } from './types';
 import {
   createHttpServer,
   extractNumberEnvVar,
@@ -19,6 +19,7 @@ import {
   isConnectionProfile,
   isPlatformConfig,
   logger,
+  waitSecond,
 } from './utils';
 
 const PORT = extractNumberEnvVar('PORT') || 3000;
@@ -29,6 +30,7 @@ const platformConfig = extractStringEnvVar('PLATFORM_CONFIG');
 let server: http.Server;
 let profile: ConnectionProfile;
 let config: PlatformConfig;
+let platform: Platform;
 
 class Broadcaster extends WebSocket.Server {
   constructor(bServer: any) {
@@ -90,12 +92,14 @@ class Broadcaster extends WebSocket.Server {
   }
 
   // Overriding configuration via env variables
+  const channelName = process.env.CHANNEL_NAME;
   const qPort = process.env.QUERYDB_PORT && Number(process.env.QUERYDB_PORT);
   const qHost = process.env.QUERYDB_HOST;
   const qDb = process.env.QUERYDB_DATABASE;
   const qUser = process.env.QUERYDB_USERNAME;
   const qPw = process.env.QUERYDB_PASSWD;
-  const qLogging = process.env.QUERYDB_LOGGING && Boolean(process.env.QUERYDB_LOGGING);
+  const logging = process.env.QUERYDB_LOGGING;
+  const qLogging = logging === 'true' ? true : logging === 'false' ? false : logging;
   const mPort = process.env.METRICSERVER_PORT && Number(process.env.METRICSERVER_PORT);
   const mHost = process.env.METRICSERVER_HOST;
   const mInt = process.env.METRICSERVER_INTERVAL && Number(process.env.METRICSERVER_INTERVAL);
@@ -113,6 +117,7 @@ class Broadcaster extends WebSocket.Server {
   const sDevMode = process.env.SYNC_DEVMODE && Boolean(process.env.SYNC_DEVMODE);
   const sPersist = process.env.SYNC_PERSIST && Boolean(process.env.SYNC_PERSIST);
   const rTimeout = process.env.REPO_TIMEOUTMS && Number(process.env.REPO_TIMEOUTMS);
+  channelName && (config.channelName = channelName);
   qPort && (config.querydb.port = qPort);
   qHost && (config.querydb.host = qHost);
   qDb && (config.querydb.database = qDb);
@@ -136,22 +141,12 @@ class Broadcaster extends WebSocket.Server {
   sPersist && (config.sync.persist = sPersist);
   rTimeout && (config.repo.requestTimeoutMs = rTimeout);
 
-  logger.info('platform-config : ', config);
-
-  const connectionOptions: ConnectionOptions = {
-    name: 'default',
-    type: 'postgres' as any,
-    host: config.querydb.host,
-    port: config.querydb.port,
-    username: config.querydb.username,
-    password: config.querydb.password,
-    database: config.querydb.database,
-    logging: config.querydb.logging,
-    synchronize: false,
-    dropSchema: false,
-    entities: [Blocks, Transactions, Commit, KeyValue, FabricWallet, Incident],
-    connectTimeoutMS: 10000,
-  };
+  console.table(config.fabric);
+  console.table(config.querydb);
+  console.table(config.metricserver);
+  console.table(config.messageCenter);
+  console.table(config.repo);
+  console.table(config.sync);
 
   /**
    * Step 4: event listeners
@@ -166,32 +161,74 @@ class Broadcaster extends WebSocket.Server {
     logger.error(up);
   });
 
-  let connections = [];
-
-  server.on('connection', (connection) => {
-    connections.push(connection);
-    connection.on('close', () => (connections = connections.filter((curr) => curr !== connection)));
-  });
+  // Todo: below block throws
+  // let connections = [];
+  // server.on('connection', (connection) => {
+  //   connections.push(connection);
+  //   connection.on('close', () => (connections = connections.filter((curr) => curr !== connection)));
+  // });
 
   /**
    * Step 3: Platform
    */
-  logger.info('Loading platform');
-  const platform = createPlatform({
-    profile,
-    broadcaster: new Broadcaster(server),
-    wsEnabled: config?.messageCenter?.websocketEnabled,
-    config,
-    logger,
-  });
-  await platform.initialize();
+  logger.info('Creating platform');
+  let errorMsg = 'fail to create platform';
+  try {
+    platform = createPlatform({
+      connectionName: config.querydb.connectionName,
+      profile,
+      broadcaster: null, // new Broadcaster(server),
+      wsEnabled: config?.messageCenter?.websocketEnabled,
+      config,
+      logger,
+    });
+  } catch {
+    logger.error(errorMsg);
+    process.exit(1);
+  }
+
+  errorMsg = 'fail to initialize platform';
+  try {
+    logger.info('Initializing');
+    const isPlatformInit = await platform.initialize();
+
+    if (!isPlatformInit) {
+      logger.error(`${errorMsg}; will exit in 30 seconds`);
+      logger.error(util.format('connection-profile, %j', profile));
+      logger.error(util.format('platform-config, %j', config));
+      await waitSecond(30);
+      process.exit(1);
+    }
+  } catch (e) {
+    logger.error(e);
+    logger.error(errorMsg);
+    logger.error(util.format('connection-profile, %j', profile));
+    logger.error(util.format('platform-config, %j', config));
+    process.exit(1);
+  }
+
+  try {
+    logger.info('Starting sync');
+    const isSyncStarted = await platform.getSynchronizer().start();
+    errorMsg = 'fail to sync-start';
+    if (!isSyncStarted) {
+      logger.error(`❌  ${errorMsg}. The platform will start WITHOUT synchonrization.`);
+      logger.error(util.format('connection-profile, %j', profile));
+      logger.error(util.format('platform-config, %j', config));
+    }
+  } catch (e) {
+    logger.error(e);
+    logger.error(`❌  ${errorMsg}. The platform will start WITHOUT synchonrization.`);
+    logger.error(util.format('connection-profile, %j', profile));
+    logger.error(util.format('platform-config, %j', config));
+  }
 
   /**
    * Step 4: Http server
    */
   logger.info('Loading http server');
   try {
-    server = (await createHttpServer({ platform, connectionOptions, logger })).app;
+    server = (await createHttpServer({ platform, logger })).app;
   } catch (error) {
     logger.error(util.format('❌  An error occurred while createHttpserver: %j', error));
     process.exit(1);

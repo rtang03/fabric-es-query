@@ -14,6 +14,7 @@ export type TAction = {
   payload: {
     tx_id: string;
     option?: {
+      channelName: string;
       logger: winston.Logger;
       fabric?: Partial<FabricGateway>;
       queryDb?: Partial<QueryDb>;
@@ -43,9 +44,9 @@ export const dispatcher: (
     const { showStateChanges, logger } = option;
 
     if (store.getState()?.syncJob.running) {
-      logger.error('fail to dispatch, when there is active job');
+      logger.error('sync:dispatcher fail to dispatch, when there is active job');
 
-      throw new Error('fail to dispatch');
+      throw new Error('fail to dispatch, when there is active job');
     }
 
     const tid = generateToken();
@@ -63,7 +64,10 @@ export const dispatcher: (
 
       showStateChanges &&
         logger.info(
-          util.format('syncJob state: %j', removeEmptyField(omit(syncJob, 'data', 'error')))
+          util.format(
+            'dispatcher:syncJob state: %j',
+            removeEmptyField(omit(syncJob, 'data', 'error'))
+          )
         );
 
       if (tx_id === tid && status === 'ok') {

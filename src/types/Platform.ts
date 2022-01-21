@@ -28,5 +28,4 @@ export type Platform = {
   getSynchronizer: () => Synchronizer;
   getMessageCenter: () => MessageCenter;
   getHealthInfo: () => Promise<HealthInfo>;
-  shutdown: () => Promise<void>;
 };

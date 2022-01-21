@@ -29,7 +29,7 @@ export const getCommitRoute = ({ repo, logger }: RouterOption) => {
 
       Debug(`${NS}:delete`)('entityName: %s, entityId: %s', entityName, entityId);
 
-      const result = await repo.cmd_deleteByEntityId(entityName, entityId);
+      const result = await repo.cmd_deleteByEntityId({ entityName, id: entityId });
 
       result.status === 'ok'
         ? res.status(Status.OK).send(result)

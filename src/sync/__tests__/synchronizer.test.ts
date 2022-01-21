@@ -49,6 +49,7 @@ const database = extractStringEnvVar('QUERYDB_DATABASE');
 const connectionProfile = extractStringEnvVar('CONNECTION_PROFILE');
 const adminId = extractStringEnvVar('ADMIN_ID');
 const adminSecret = extractStringEnvVar('ADMIN_SECRET');
+const channelName = extractStringEnvVar('CHANNEL_NAME');
 const connectionOptions: ConnectionOptions = {
   name: 'default',
   type: 'postgres' as any,
@@ -129,6 +130,7 @@ beforeAll(async () => {
   try {
     // Notice that first sync job will be dispatched after initialSyncTime (10 second) is lapsed.
     synchronizer = createSynchronizer(10, {
+      channelName,
       persist: false,
       initialTimeoutMs: 2000,
       initialShowStateChanges: true,
@@ -172,47 +174,38 @@ describe('sync tests', () => {
     // Notice that this test will run only once
     const result = await synchronizer.start(1);
     await synchronizer.stop();
+    expect(result).toBeTruthy();
+  });
 
-    if (result) {
-      const blockHeighQuery = await queryDb.getBlockHeight();
-      expect(blockHeighQuery).toEqual(11);
+  it('verify blocks', async () => {
+    const blockHeighQuery = await queryDb.getBlockHeight();
+    expect(blockHeighQuery).toEqual(11);
 
-      // validate data after dispatch
-      const blocks = await queryDb.findBlock({
-        skip: 0,
-        take: 11,
-        sort: 'ASC',
-        orderBy: 'blocknum',
-      });
-      expect(blocks.total).toEqual(11);
-      expect(blocks.hasMore).toBeFalsy();
-      expect(blocks.cursor).toEqual(11);
-      expect(blocks.items.filter(({ verified }) => verified).length).toEqual(11);
+    // validate data after dispatch
+    const blocks = await queryDb.findBlock({
+      skip: 0,
+      take: 11,
+      sort: 'ASC',
+      orderBy: 'blocknum',
+    });
+    expect(blocks.total).toEqual(11);
+    expect(blocks.hasMore).toBeFalsy();
+    expect(blocks.cursor).toEqual(11);
+    expect(blocks.items.filter(({ verified }) => verified).length).toEqual(11);
+  });
 
-      const tx = await queryDb.findTxWithCommit({
-        skip: 0,
-        take: 10,
-        sort: 'ASC',
-        orderBy: 'blockid',
-        code: CODE.PUBLIC_COMMIT,
-      });
-
-      expect(tx.total).toEqual(2);
-      expect(tx.hasMore).toBeFalsy();
-      expect(tx.cursor).toEqual(2);
-      expect(tx.items.map(({ blockid }) => blockid)).toEqual([7, 9]);
-
-      const commits = await queryDb.findCommit({
-        skip: 0,
-        take: 10,
-        sort: 'ASC',
-        orderBy: 'commitId',
-        entityName: 'dev_entity',
-      });
-      expect(commits.total).toEqual(2);
-      expect(commits.hasMore).toBeFalsy();
-      expect(commits.cursor).toEqual(2);
-      expect(commits.items.map(({ blocknum }) => blocknum)).toEqual([7, 9]);
-    } else return Promise.reject('this test fails');
+  it('verify commits', async () => {
+    const commits = await queryDb.findCommit({
+      skip: 0,
+      take: 10,
+      sort: 'ASC',
+      orderBy: 'commitId',
+      entityName: 'dev_entity',
+    });
+    console.log(commits);
+    expect(commits.total).toEqual(2);
+    expect(commits.hasMore).toBeFalsy();
+    expect(commits.cursor).toEqual(2);
+    expect(commits.items.map(({ blocknum }) => blocknum)).toEqual([7, 9]);
   });
 });

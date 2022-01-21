@@ -1,9 +1,10 @@
+channelName: loanapp
 sync:
-  syncDuration: 5
-  requestTimeoutMs: 2000
-  showStateChanges: false
+  syncDuration: 20
+  requestTimeoutMs: 5000
+  showStateChanges: true
   devMode: false
-  persist: false
+  persist: true
 fabric:
   orgAdminId: admin-org1.net
   orgAdminSecret: admin-org1.netPW
@@ -18,7 +19,7 @@ querydb:
   database: 'eventstore'
   username: 'postgres'
   password: 'docker'
-  logging: false
+  logging: true
   connectTimeoutMS: 10000
 metricserver:
   host: 'localhost'

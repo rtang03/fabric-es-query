@@ -104,7 +104,7 @@ export const queue = createModel<RootModel>()({
       const logger = payload?.option?.logger;
       let result: DispatcherResult;
 
-      logger?.info('== asyncStart ==');
+      logger?.info('== model:queue:dispatchSyncJob ==');
 
       dispatch.queue.syncStart();
 
@@ -113,7 +113,9 @@ export const queue = createModel<RootModel>()({
 
         Debug(NS)('runJob result, %O', result);
       } catch (error) {
-        logger.error(util.format('fail to run syncStart, %j', error));
+        // error is {}.
+        // it may not be an error; when the syncStart is thrown because of pre-existing running job
+        logger.warn(util.format('fail to run syncStart, %j', error));
         dispatch.queue.setResult({ status: 'error', error });
       }
 

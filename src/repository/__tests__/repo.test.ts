@@ -66,6 +66,7 @@ const database = extractStringEnvVar('QUERYDB_DATABASE');
 const connectionProfile = extractStringEnvVar('CONNECTION_PROFILE');
 const adminId = extractStringEnvVar('ADMIN_ID');
 const adminSecret = extractStringEnvVar('ADMIN_SECRET');
+const channelName = extractStringEnvVar('CHANNEL_NAME');
 const connectionOptions: ConnectionOptions = {
   name: 'default',
   type: 'postgres' as any,
@@ -153,6 +154,7 @@ beforeAll(async () => {
   try {
     // 300 sec is long enough so that this test suite will finish before regular sync start
     synchronizer = createSynchronizer(300, {
+      channelName,
       persist: false,
       initialTimeoutMs: 2000,
       initialShowStateChanges: false,

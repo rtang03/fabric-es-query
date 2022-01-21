@@ -88,6 +88,8 @@ export const createPlatform: (option: CreatePlatformOption) => Platform = ({
       await fabric.disconnect();
       await messageCenter.disconnect();
       await queryDb.disconnect();
+      await synchronizer.stop();
+      await connection.close();
     },
     /**
      * getHealthInfo
@@ -253,6 +255,7 @@ export const createPlatform: (option: CreatePlatformOption) => Platform = ({
       logger.info(`step 7: create synchronizer`);
       try {
         synchronizer = createSynchronizer(config.sync.syncDuration, {
+          channelName: config.channelName,
           broadcaster,
           fabric,
           initialTimeoutMs: config.sync.requestTimeoutMs,
@@ -319,6 +322,5 @@ export const createPlatform: (option: CreatePlatformOption) => Platform = ({
 
       return true;
     },
-    shutdown: async () => Promise.reject('not yet implemented'),
   };
 };

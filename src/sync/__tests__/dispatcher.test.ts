@@ -1,11 +1,12 @@
 require('dotenv').config({ path: 'src/sync/__tests__/.env.sync' });
 import { processBlockEvent } from '../../fabric';
 import { KEY } from '../../querydb';
-import { logger, waitSecond } from '../../utils';
+import { extractStringEnvVar, logger, waitSecond } from '../../utils';
 import { dispatcher, type TAction } from '../dispatcher';
 import { block7, block8, block9, block10 } from './__utils__';
 
-const option: TAction['payload']['option'] = { logger, timeout: 5000 };
+const channelName = extractStringEnvVar('CHANNEL_NAME');
+const option: TAction['payload']['option'] = { channelName, logger, timeout: 5000 };
 
 const fabric = {
   queryChannelHeight: jest.fn(),
