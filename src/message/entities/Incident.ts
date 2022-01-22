@@ -5,10 +5,10 @@ export class Incident {
   @PrimaryGeneratedColumn({ type: 'int' })
   id: number;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', length: 256, nullable: true })
   kind: string;
 
-  @Column({ type: 'varchar', nullable: false })
+  @Column({ type: 'varchar', length: 256, nullable: false })
   title: string;
 
   @Column({ type: 'varchar', nullable: true })
@@ -20,7 +20,7 @@ export class Incident {
   @Column({ type: 'simple-json', nullable: true })
   data: any;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', length: 256, nullable: true })
   errormsg: string;
 
   @Column({ type: 'varchar', nullable: true })

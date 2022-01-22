@@ -5,9 +5,9 @@ export class KeyValue {
   @PrimaryColumn({ type: 'varchar' })
   key: string;
 
-  @Column({ type: 'varchar', nullable: false })
+  @Column({ type: 'varchar', nullable: true })
   value: string;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamp', nullable: false})
   modified: Date;
 }

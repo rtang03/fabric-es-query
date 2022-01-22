@@ -31,7 +31,7 @@ export class Commit {
   key: string;
 
   @Index()
-  @Column({ type: 'varchar', nullable: false })
+  @Column({ type: 'varchar', length: 256, nullable: false })
   id: string;
 
   @Index()
