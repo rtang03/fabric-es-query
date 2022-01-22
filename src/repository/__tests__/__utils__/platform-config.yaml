@@ -1,0 +1,17 @@
+channelName: loanapp
+sync:
+  # second
+  syncDuration: 5
+querydb:
+  type: 'postgres'
+  host: 'localhost'
+  port: 5432
+  database: 'eventstore'
+  username: 'postgres'
+  password: 'password'
+  logging: false
+  connectTimeoutMS: 10000
+metricserver:
+  host: 'localhost'
+  port: 9000
+  interval: 1000

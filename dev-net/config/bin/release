@@ -1,0 +1,43 @@
+#!/bin/sh
+# The bin/release script is responsible for providing chaincode metadata to the peer.
+# bin/release is optional. If it is not provided, this step is skipped.
+#
+# The peer invokes release with two arguments:
+# bin/release BUILD_OUTPUT_DIR RELEASE_OUTPUT_DIR
+#
+# When release is invoked, BUILD_OUTPUT_DIR contains the artifacts
+# populated by the build program and should be treated as read only input.
+# RELEASE_OUTPUT_DIR is the directory where release must place artifacts to be consumed by the peer.
+echo "=== RELEASE ===" >> /var/artifacts/release.log
+set -euo pipefail
+BUILD_OUTPUT_DIR="$1"
+RELEASE_OUTPUT_DIR="$2"
+echo "BUILD_OUTPUT_DIR = $BUILD_OUTPUT_DIR" >> /var/artifacts/release.log
+echo "RELEASE_OUTPUT_DIR = $RELEASE_OUTPUT_DIR" >> /var/artifacts/release.log
+
+# copy indexes from metadata/* to the output directory
+if [ -d "$BUILD_OUTPUT_DIR/metadata" ] ; then
+    cp -a "$BUILD_OUTPUT_DIR/metadata/"* "$RELEASE_OUTPUT_DIR/"
+fi
+
+echo "Preparing connection.json..." >> /var/artifacts/release.log
+
+#external chaincodes expect artifacts to be placed under "$RELEASE_OUTPUT_DIR"/chaincode/server
+if [ -f $BUILD_OUTPUT_DIR/connection.json ]; then
+    echo "$BUILD_OUTPUT_DIR/connection.json exists" >> /var/artifacts/release.log
+
+    mkdir -p "$RELEASE_OUTPUT_DIR"/chaincode/server
+
+    cp $BUILD_OUTPUT_DIR/connection.json "$RELEASE_OUTPUT_DIR"/chaincode/server
+
+    cat "$RELEASE_OUTPUT_DIR"/chaincode/server/connection.json >> /var/artifacts/release.log
+
+    ls -la "$RELEASE_OUTPUT_DIR"/chaincode/server >> /var/artifacts/release.log
+
+    #if tls_required is true, copy TLS files (using above example, the fully qualified path for these fils would be "$RELEASE_OUTPUT_DIR"/chaincode/server/tls)
+    echo "=== END RELEASE 0 ===" >> /var/artifacts/release.log
+    exit 0
+fi
+
+echo "=== END RELEASE 1 ===" >> /var/artifacts/release.log
+exit 1

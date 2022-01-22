@@ -1,0 +1,6 @@
+artifacts/
+volume/
+config/configtx.yaml
+*.block
+.DS_Store
+.env

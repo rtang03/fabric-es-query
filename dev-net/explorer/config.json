@@ -1,0 +1,8 @@
+{
+  "network-configs": {
+    "cdi": {
+      "name": "Test Network",
+      "profile": "./connection-profile/test-network.json"
+    }
+  }
+}
