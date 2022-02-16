@@ -1,4 +1,4 @@
-import { Incident } from '../message/entities';
+import { Incident } from '../message/entities/Mongo.Incident';
 import { Blocks, Commit, Transactions } from '../querydb/entities';
 import type { Paginated } from './Paginated';
 

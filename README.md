@@ -1,5 +1,23 @@
 # fabric-es-query
-fabric-es query handler
+The query-handler micro-service, for extending Hyperledger Fabric, with CQRS.
+
+### Technology used:
+
+- "hyperledger"
+- "redux"
+- "rxjs"
+- "opentelemetry"
+- "prometheus"
+- "express"
+- "mongodb"
+- "psql"
+- "websocket"
+- "typeorm"
+- "jest"
+
+### Getting Started
+
+TODO
 
 ### Reference info
 

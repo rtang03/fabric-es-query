@@ -9,7 +9,7 @@ import winston from 'winston';
 import WebSocket from 'ws';
 import type { MessageCenter, Message, PaginatedIncident, NewCommitNotify } from '../types';
 import { MSG } from './constant';
-import { Incident } from './entities';
+import { Incident } from './entities/Mongo.Incident';
 
 export type CreateMessageCenterOptions = {
   persist?: boolean;
@@ -165,12 +165,10 @@ export const createMessageCenter: (options: CreateMessageCenterOptions) => Messa
 
         Debug(`${NS}:${me}`)('query, %O', query);
 
-        const total = await connection.getRepository(Incident).count(query);
-
         take && (query['take'] = take);
         skip && (query['skip'] = skip);
 
-        const items = await connection.getRepository(Incident).find(query);
+        const [items, total] = await connection.getMongoRepository(Incident).findAndCount(query);
 
         const hasMore = skip + take < total;
         const cursor = hasMore ? skip + take : total;
